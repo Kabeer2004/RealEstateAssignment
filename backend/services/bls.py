@@ -115,10 +115,10 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> dict:
     """
     major_sectors = {
         '23': 'Construction',
-        '31': 'Manufacturing', # Note: BLS uses 31-33 for manufacturing supersector
+        '31': 'Manufacturing',
         '42': 'Wholesale Trade',
-        '44': 'Retail Trade', # Note: 44-45 for retail
-        '48': 'Transportation and Warehousing', # 48-49
+        '44': 'Retail Trade',
+        '48': 'Transportation and Warehousing',
         '51': 'Information',
         '52': 'Finance and Insurance',
         '53': 'Real Estate and Rental',
@@ -129,18 +129,30 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> dict:
         '72': 'Accommodation and Food Services',
     }
 
-    # Series for sectors (Private Employment) and total average weekly wage
+    # Correct BLS QCEW series ID format
+    # Format: ENU + county_fips + datatype + size + ownership + industry
+    # DataType: 1=Employment, 4=Average Weekly Wage
+    # Size: 0=All sizes
+    # Ownership: 5=Private
+    # Industry: 2-digit NAICS codes for sectors, "10"=All Industries
+
+    # Employment series for sectors (datatype=1)
     sector_series_ids = [f"ENU{county_fips}105{naics}" for naics in major_sectors.keys()]
-    wage_series_id = f"ENU{county_fips}11510" # Avg weekly wage, private, all industries
-    series_ids = sector_series_ids + [wage_series_id]
+
+    # Average weekly wage series (datatype=4, not 11!)
+    wage_series_id = f"ENU{county_fips}40510"  # datatype=4, size=0, ownership=5, industry=10
+
+    all_series_ids = sector_series_ids + [wage_series_id]
+
+    print(f"DEBUG: Requesting wage series: {wage_series_id}")
 
     current_year = date.today().year
-    start_year = str(current_year - 6) # Go back further for wage trends
-    end_year = str(current_year - 1)  # QCEW has a 6-month lag, so last full year is safest
+    start_year = str(current_year - 6)
+    end_year = str(current_year - 1)  # QCEW has 6-month lag
 
     headers = {'Content-type': 'application/json'}
     payload = json.dumps({
-        "seriesid": series_ids,
+        "seriesid": all_series_ids,
         "startyear": start_year,
         "endyear": end_year,
         "registrationkey": BLS_API_KEY,
@@ -158,48 +170,71 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> dict:
                 return {"error": result.get('message', ['Unknown QCEW error'])[0]}
 
             series = result.get('Results', {}).get('series', [])
+
             sector_growth = []
             wage_data_raw = None
 
             for s in series:
                 series_id = s['seriesID']
+
+                # Handle wage data
                 if series_id == wage_series_id:
-                    wage_data_raw = sorted(s.get('data', []), key=lambda d: d['year'], reverse=True)
+                    if s.get('data') and len(s['data']) > 0:
+                        wage_data_raw = sorted(s.get('data', []), key=lambda d: d['year'], reverse=True)
+                        print(f"DEBUG: Found wage data: {len(wage_data_raw)} records")
                     continue
 
+                # Handle sector employment data
                 if not s.get('data'):
                     continue
 
-                industry_code = series_id[11:]
+                # Extract industry code from series ID (last 2 digits)
+                industry_code = series_id[-2:]
                 industry_name = major_sectors.get(industry_code, f'Industry {industry_code}')
                 data = sorted(s.get('data', []), key=lambda d: d['year'], reverse=True)
 
-                if data and data[0].get('calculations') and data[0]['calculations'].get('pct_changes'):
-                    if '12' in data[0]['calculations']['pct_changes']:
-                        growth_rate = float(data[0]['calculations']['pct_changes']['12'])
-                        sector_growth.append((growth_rate, industry_name))
+                # Calculate year-over-year growth
+                if len(data) >= 2:
+                    try:
+                        current_val = float(data[0]['value'])
+                        prior_val = float(data[1]['value'])
+                        if prior_val > 0:
+                            growth_rate = round(((current_val - prior_val) / prior_val) * 100, 2)
+                            sector_growth.append((growth_rate, industry_name))
+                    except (ValueError, KeyError):
+                        continue
 
             top_sectors = sorted(sector_growth, key=lambda x: x[0], reverse=True)[:3]
 
             # Process wage data
             wage_info = {"error": "No wage data available"}
-            if wage_data_raw:
-                latest_wage = float(wage_data_raw[0]['value'])
-                def get_wage_growth(years_back):
-                    if len(wage_data_raw) > years_back:
-                        old_wage = float(wage_data_raw[years_back]['value'])
-                        if old_wage > 0:
-                            return round(((latest_wage - old_wage) / old_wage) * 100, 2)
-                    return None
-                wage_info = {
-                    "current_avg_weekly_wage": latest_wage,
-                    "annual_equivalent": round(latest_wage * 52, 0),
-                    "wage_growth": {
-                        "1y": get_wage_growth(1),
-                        "3y": get_wage_growth(3),
-                        "5y": get_wage_growth(5)
+            if wage_data_raw and len(wage_data_raw) > 0:
+                try:
+                    latest_wage = float(wage_data_raw[0]['value'])
+
+                    def get_wage_growth(years_back):
+                        if len(wage_data_raw) > years_back:
+                            try:
+                                old_wage = float(wage_data_raw[years_back]['value'])
+                                if old_wage > 0:
+                                    return round(((latest_wage - old_wage) / old_wage) * 100, 2)
+                            except (ValueError, IndexError):
+                                pass
+                        return None
+
+                    wage_info = {
+                        "current_avg_weekly_wage": latest_wage,
+                        "annual_equivalent": round(latest_wage * 52, 0),
+                        "wage_growth": {
+                            "1y": get_wage_growth(1),
+                            "3y": get_wage_growth(3),
+                            "5y": get_wage_growth(5)
+                        }
                     }
-                }
+                    print(f"DEBUG: Wage info created successfully: ${latest_wage}/week")
+
+                except (ValueError, KeyError) as e:
+                    wage_info = {"error": f"Error processing wage data: {e}"}
 
             return {
                 "top_sectors_growing": [{"name": name, "growth": growth} for growth, name in top_sectors],

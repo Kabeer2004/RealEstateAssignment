@@ -311,15 +311,19 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
         county_fips = fips['state_fips'] + fips['county_fips'][2:]
 
         # Parallel fetches
-        lau_task = fetch_bls_lau_data(county_fips)
-        qcew_sectors_task = fetch_bls_qcew_sectors(county_fips)
-        census_task = asyncio.sleep(0)
-        if geo_type in ['tract', 'zip']:
-            census_task = fetch_census_data(fips, geo, geo_type)
+        tasks = [
+            fetch_bls_lau_data(county_fips),
+            fetch_bls_qcew_sectors(county_fips),
+        ]
 
-        lau_data, top_sectors, census_data = await asyncio.gather(
-            lau_task, qcew_sectors_task, census_task
-        )
+        census_task_added = False
+        if geo_type in ['tract', 'zip']:
+            tasks.append(fetch_census_data(fips, geo, geo_type))
+            census_task_added = True
+
+        results = await asyncio.gather(*tasks)
+        lau_data, top_sectors = results[0], results[1]
+        census_data = results[2] if census_task_added else None
 
         notes = []
         county_context = None

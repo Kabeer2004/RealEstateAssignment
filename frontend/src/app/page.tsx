@@ -229,7 +229,7 @@ function JobGrowthCard({
 
 	if (!data) return null;
 
-	const { granular_data, county_context, notes } = data;
+	const { granular_data, county_context, notes = [] } = data;
 	const hasGranularData = granular_data && !granular_data.error;
 	const hasCountyData = county_context && !county_context.error;
 
@@ -300,8 +300,9 @@ function JobGrowthCard({
 
 function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
 	const growthPeriods = ["6mo", "1y", "2y", "5y"] as const;
+	const growth = data.growth || {};
 	const growthData = growthPeriods
-		.map((p) => ({ period: p, value: data.growth[p] }))
+		.map((p) => ({ period: p, value: growth[p] }))
 		.filter((d) => d.value != null);
 
 	return (

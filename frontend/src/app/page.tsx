@@ -41,6 +41,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Plus, X, LayoutGrid, Rows3 } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
+import { cn } from "@/lib/utils";
 
 interface Growth {
 	"6mo"?: number;
@@ -52,6 +53,58 @@ interface Growth {
 interface Sector {
 	name: string;
 	growth: number;
+}
+
+interface WageData {
+	current_avg_weekly_wage?: number;
+	annual_equivalent?: number;
+	wage_growth?: { "1y"?: number; "3y"?: number; "5y"?: number };
+	error?: string;
+}
+
+interface ComparativePerformance {
+	[key: string]: {
+		local_rate: number;
+		national_rate: number;
+		difference: number;
+		outperforming: boolean;
+		performance_description: string;
+	};
+}
+
+interface DownturnResilience {
+	covid_impact?: { job_loss_percent: number };
+	great_recession_impact?: { job_loss_percent: number };
+	resilience_score?: number;
+	resilience_rating?: "High" | "Moderate" | "Low";
+	error?: string;
+}
+
+interface IncomeData {
+	median_household_income?: number;
+	data_year?: number;
+	error?: string;
+}
+
+interface LaborParticipation {
+	labor_force_participation_rate?: number;
+	data_year?: number;
+	error?: string;
+}
+
+interface EducationData {
+	percent_college_educated?: number;
+	workforce_quality_rating?: "High" | "Moderate" | "Low";
+	data_year?: number;
+	error?: string;
+}
+
+interface CRESummary {
+	employment_growth_strength: "strong" | "moderate" | "weak";
+	wage_growth_strength: "strong" | "moderate" | "weak";
+	workforce_quality: "High" | "Moderate" | "Low" | "Unknown";
+	recession_resilience: "High" | "Moderate" | "Low" | "Unknown";
+	vs_national_performance: "outperforming" | "underperforming";
 }
 
 interface DataPayload {
@@ -69,12 +122,19 @@ interface DataPayload {
 		label: string;
 	}[];
 	error?: string;
+	wage_data?: WageData;
+	comparative_performance?: ComparativePerformance;
+	downturn_resilience?: DownturnResilience;
+	income_data?: IncomeData;
+	labor_participation?: LaborParticipation;
+	education_data?: EducationData;
 }
 
 interface JobGrowthData {
 	geo: { lat: number; lon: number };
 	county_context?: DataPayload;
 	granular_data?: DataPayload;
+	cre_summary: CRESummary;
 	notes: string[];
 }
 
@@ -315,6 +375,23 @@ function JobGrowthCard({
 	flushCache: boolean;
 }) {
 	const [isModalOpen, setIsModalOpen] = useState(false);
+
+	const getRatingClass = (r?: string) => {
+		switch (r?.toLowerCase()) {
+			case "high":
+			case "strong":
+			case "outperforming":
+				return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
+			case "moderate":
+				return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+			case "low":
+			case "weak":
+			case "underperforming":
+				return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+			default:
+				return "bg-secondary text-secondary-foreground";
+		}
+	};
 	const queryClient = useQueryClient();
 	const { data, isLoading, error } = useQuery({
 		queryKey: ["jobGrowth", address, geoType, flushCache],
@@ -359,10 +436,13 @@ function JobGrowthCard({
 
 	if (!data) return null;
 
-	const { granular_data, county_context } = data;
+	const { granular_data, county_context, cre_summary } = data;
 	const hasGranularData = granular_data && !granular_data.error;
 
 	const mainData = hasGranularData ? granular_data : county_context;
+
+	const growth1Y = mainData?.growth?.["1y"];
+	const wageGrowth1Y = county_context?.wage_data?.wage_growth?.["1y"];
 
 	return (
 		<>
@@ -383,17 +463,53 @@ function JobGrowthCard({
 					</CardHeader>
 					<CardContent>
 						{mainData && (
-							<div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-								<div className="font-medium">Total Jobs:</div>
-								<div>
-									{(
-										mainData.total_jobs ?? 0
-									).toLocaleString()}
+							<div className="space-y-4">
+								<div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+									<div className="font-medium text-muted-foreground">
+										Total Jobs
+									</div>
+									<div className="text-right font-semibold">
+										{(
+											mainData.total_jobs ?? 0
+										).toLocaleString()}
+									</div>
+									<div className="font-medium text-muted-foreground">
+										Unemployment
+									</div>
+									<div className="text-right font-semibold">
+										{mainData.unemployment_rate != null
+											? `${mainData.unemployment_rate.toFixed(
+													1
+											  )}%`
+											: "N/A"}
+									</div>
+									<div className="font-medium text-muted-foreground">
+										1Y Job Growth
+									</div>
+									<div className="text-right font-semibold">
+										{growth1Y != null
+											? `${growth1Y.toFixed(1)}%`
+											: "N/A"}
+									</div>
+									<div className="font-medium text-muted-foreground">
+										1Y Wage Growth
+									</div>
+									<div className="text-right font-semibold">
+										{wageGrowth1Y != null
+											? `${wageGrowth1Y.toFixed(1)}%`
+											: "N/A"}
+									</div>
 								</div>
-								<div className="font-medium">Unemployment:</div>
-								<div>
-									{mainData.unemployment_rate?.toFixed(1)}%
-								</div>
+								{cre_summary && (
+									<div className="flex flex-wrap gap-2 pt-3 border-t">
+										<Badge variant="outline" className={cn("font-normal", getRatingClass(cre_summary.workforce_quality))}>
+											Workforce: {cre_summary.workforce_quality}
+										</Badge>
+										<Badge variant="outline" className={cn("font-normal", getRatingClass(cre_summary.recession_resilience))}>
+											Resilience: {cre_summary.recession_resilience}
+										</Badge>
+									</div>
+								)}
 							</div>
 						)}
 					</CardContent>
@@ -445,7 +561,7 @@ function ComparisonTable({
 		},
 		{
 			label: "1Y Growth",
-			path: "growth.1y",
+			path: "growth.1y", // Path within either granular or county
 			format: (v: number) => v + "%" ?? "N/A",
 		},
 		{
@@ -459,30 +575,63 @@ function ComparisonTable({
 			format: (v: number) => v + "%" ?? "N/A",
 		},
 		{
-			label: "Top Sector 1",
-			path: "top_sectors_growing.0",
-			format: (v: any) => (v ? `${v.name}: ${v.growth}%` : "N/A"),
+			label: "Avg. Weekly Wage",
+			path: "wage_data.current_avg_weekly_wage",
+			format: (v: number) =>
+				new Intl.NumberFormat("en-US", {
+					style: "currency",
+					currency: "USD",
+				}).format(v),
 		},
 		{
-			label: "Top Sector 2",
-			path: "top_sectors_growing.1",
-			format: (v: any) => (v ? `${v.name}: ${v.growth}%` : "N/A"),
+			label: "1Y Wage Growth",
+			path: "wage_data.wage_growth.1y",
+			format: (v: number) => v + "%" ?? "N/A",
 		},
 		{
-			label: "Top Sector 3",
-			path: "top_sectors_growing.2",
-			format: (v: any) => (v ? `${v.name}: ${v.growth}%` : "N/A"),
+			label: "Median HH Income",
+			path: "income_data.median_household_income",
+			format: (v: number) =>
+				new Intl.NumberFormat("en-US", {
+					style: "currency",
+					currency: "USD",
+					maximumFractionDigits: 0,
+				}).format(v),
 		},
-		{ label: "Data Source", path: "source" },
+		{
+			label: "Labor Participation",
+			path: "labor_participation.labor_force_participation_rate",
+			format: (v: number) => v + "%" ?? "N/A",
+		},
+		{
+			label: "% College Educated",
+			path: "education_data.percent_college_educated",
+			format: (v: number) => v + "%" ?? "N/A",
+		},
+		{
+			label: "Resilience Score",
+			path: "downturn_resilience.resilience_score",
+			format: (v: number) => v?.toFixed(1) ?? "N/A",
+		},
+		{
+			label: "Workforce Quality",
+			path: "education_data.workforce_quality_rating",
+		},
 	];
 
-	const getNestedValue = (obj: any, path: string) => {
-		if (!obj) return "N/A";
-		const data =
-			obj.granular_data && !obj.granular_data.error
-				? obj.granular_data
-				: obj.county_context || {};
-		return path.split(".").reduce((acc, part) => acc && acc[part], data);
+	const getNestedValue = (resultData: any, path: string) => {
+		if (!resultData) return undefined;
+
+		// Merge contexts, granular takes precedence
+		const mergedData = {
+			...(resultData.county_context || {}),
+			...(resultData.granular_data || {}),
+		};
+
+		const value = path
+			.split(".")
+			.reduce((acc, part) => acc && acc[part], mergedData);
+		return value;
 	};
 
 	return (
@@ -750,6 +899,95 @@ function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
 		</div>
 	);
 }
+
+function MetricDisplay({
+	title,
+	value,
+	unit = "",
+	rating,
+	helpText,
+}: {
+	title: string;
+	value?: string | number;
+	unit?: string;
+	rating?: string;
+	helpText?: string;
+}) {
+	if (value === undefined || value === null) return null;
+
+	const getRatingClass = (r?: string) => {
+		switch (r?.toLowerCase()) {
+			case "high":
+			case "strong":
+			case "outperforming":
+				return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
+			case "moderate":
+				return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+			case "low":
+			case "weak":
+			case "underperforming":
+				return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+			default:
+				return "bg-secondary text-secondary-foreground";
+		}
+	};
+
+	return (
+		<div className="p-3 border rounded-md bg-background/50">
+			<div className="text-xs text-muted-foreground">{title}</div>
+			<div className="flex items-baseline justify-between mt-1">
+				<span className="text-xl font-semibold">
+					{value}
+					{unit}
+				</span>
+				{rating && (
+					<Badge className={cn("text-xs", getRatingClass(rating))}>
+						{rating}
+					</Badge>
+				)}
+			</div>
+			{helpText && (
+				<div className="text-xs text-muted-foreground mt-1">
+					{helpText}
+				</div>
+			)}
+		</div>
+	);
+}
+
+function CRESummaryDisplay({ summary }: { summary?: CRESummary }) {
+	if (!summary) return null;
+	return (
+		<div className="p-4 border rounded-lg bg-secondary/50">
+			<h3 className="font-semibold text-lg mb-3">
+				CRE Investment Summary
+			</h3>
+			<div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+				<MetricDisplay
+					title="Employment Growth"
+					rating={summary.employment_growth_strength}
+				/>
+				<MetricDisplay
+					title="Wage Growth"
+					rating={summary.wage_growth_strength}
+				/>
+				<MetricDisplay
+					title="Workforce Quality"
+					rating={summary.workforce_quality}
+				/>
+				<MetricDisplay
+					title="Recession Resilience"
+					rating={summary.recession_resilience}
+				/>
+				<MetricDisplay
+					title="vs. National Avg"
+					rating={summary.vs_national_performance}
+				/>
+			</div>
+		</div>
+	);
+}
+
 function JobGrowthModalContent({
 	data,
 	geoType,
@@ -757,7 +995,13 @@ function JobGrowthModalContent({
 	data: JobGrowthData;
 	geoType: "tract" | "zip" | "county";
 }) {
-	const { granular_data, county_context, notes = [], geo } = data;
+	const {
+		granular_data,
+		county_context,
+		notes = [],
+		geo,
+		cre_summary,
+	} = data;
 	const hasGranularData = granular_data && !granular_data.error;
 	const hasCountyData = county_context && !county_context.error;
 
@@ -772,6 +1016,9 @@ function JobGrowthModalContent({
 				</CardDescription>
 			</CardHeader>
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
+				<div className="lg:col-span-2">
+					<CRESummaryDisplay summary={cre_summary} />
+				</div>
 				<div className="space-y-6">
 					{hasGranularData && (
 						<DataDisplay
@@ -808,6 +1055,92 @@ function JobGrowthModalContent({
 					<div>
 						<h4 className="font-semibold mb-2">Market Area</h4>
 						<Map lat={geo.lat} lon={geo.lon} geoType={geoType} />
+					</div>
+
+					<div className="space-y-4 pt-4 border-t">
+						<h4 className="font-semibold">
+							Key Economic Indicators
+						</h4>
+						{hasCountyData &&
+							county_context.wage_data &&
+							!county_context.wage_data.error && (
+								<MetricDisplay
+									title="Avg. Weekly Wage (County)"
+									value={county_context.wage_data.current_avg_weekly_wage?.toLocaleString(
+										"en-US",
+										{
+											style: "currency",
+											currency: "USD",
+											maximumFractionDigits: 0,
+										}
+									)}
+									helpText={`1Y Growth: ${
+										county_context.wage_data.wage_growth?.[
+											"1y"
+										] ?? "N/A"
+									}%`}
+								/>
+							)}
+						{hasGranularData &&
+							granular_data.income_data &&
+							!granular_data.income_data.error && (
+								<MetricDisplay
+									title={`Median Household Income (${geoType})`}
+									value={granular_data.income_data.median_household_income?.toLocaleString(
+										"en-US",
+										{
+											style: "currency",
+											currency: "USD",
+											maximumFractionDigits: 0,
+										}
+									)}
+									helpText={`Data from ${granular_data.income_data.data_year}`}
+								/>
+							)}
+						{hasGranularData &&
+							granular_data.labor_participation &&
+							!granular_data.labor_participation.error && (
+								<MetricDisplay
+									title={`Labor Force Participation (${geoType})`}
+									value={
+										granular_data.labor_participation
+											.labor_force_participation_rate
+									}
+									unit="%"
+								/>
+							)}
+						{hasGranularData &&
+							granular_data.education_data &&
+							!granular_data.education_data.error && (
+								<MetricDisplay
+									title={`College Educated Workforce (${geoType})`}
+									value={
+										granular_data.education_data
+											.percent_college_educated
+									}
+									unit="%"
+									rating={
+										granular_data.education_data
+											.workforce_quality_rating
+									}
+								/>
+							)}
+						{hasCountyData &&
+							county_context.downturn_resilience &&
+							!county_context.downturn_resilience.error && (
+								<MetricDisplay
+									title="Recession Resilience Score"
+									value={
+										county_context.downturn_resilience
+											.resilience_score
+									}
+									rating={
+										county_context.downturn_resilience
+											.resilience_rating
+									}
+									helpText="0-100, higher is better"
+								/>
+							)}
 					</div>
 
 					{notes.length > 0 && (

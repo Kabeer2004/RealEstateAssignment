@@ -16,6 +16,11 @@ interface MapProps {
 }
 
 export default function Map({ lat, lon, geoType }: MapProps) {
+	// Prevent rendering on the server
+	if (typeof window === "undefined") {
+		return null;
+	}
+
 	const radiusMeters = {
 		tract: 1609.34, // 1 mile
 		zip: 3218.69, // 2 miles
@@ -36,6 +41,7 @@ export default function Map({ lat, lon, geoType }: MapProps) {
 		<MapContainer
 			center={[lat, lon]}
 			zoom={12}
+			scrollWheelZoom={false}
 			style={{ height: "200px", width: "100%", borderRadius: "0.5rem" }}
 		>
 			<TileLayer

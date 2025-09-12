@@ -88,8 +88,7 @@ const Map = dynamic(() => import("@/components/Map"), {
 const ClientOnlySelect = dynamic(() => import("react-select"), { ssr: false });
 
 function AddressForm() {
-	const [flushCache, setFlushCache] = useState(false);
-	const { setAddresses, setGeoType } = useAddressStore();
+	const { setAddresses, setGeoType, flushCache, setFlushCache } = useAddressStore();
 
 	const methods = useForm<AddressFormData>({
 		resolver: zodResolver(addressSchema),
@@ -218,8 +217,7 @@ function AddressForm() {
 }
 
 function JobGrowthPage() {
-	const { addresses, geoType } = useAddressStore();
-	const [flushCache] = useState(false); // This state is now managed inside AddressForm
+	const { addresses, geoType, flushCache } = useAddressStore();
 
 	return (
 		<div className="flex h-screen">
@@ -437,7 +435,7 @@ function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
 							margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
 						>
 							<CartesianGrid strokeDasharray="3 3" />
-							<XAxis dataKey="label" interval={5} />
+							<XAxis dataKey="label" interval={0} />
 							<YAxis
 								tickFormatter={(value) =>
 									new Intl.NumberFormat("en-US", {

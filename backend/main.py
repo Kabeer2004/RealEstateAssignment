@@ -148,7 +148,7 @@ async def fetch_bls_lau_data(county_fips: str) -> dict:
                 "value": int(d['value']),
                 "label": f"{d['periodName'][:3]}-{d['year'][2:]}"
             }
-            for d in emp_data[:36]
+            for d in emp_data[:6]
         ]
         monthly_trends.reverse()  # For charting in ascending order
 
@@ -209,7 +209,7 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> list:
     series_ids = [f"ENU{county_fips}05{naics}" for naics in major_sectors.keys()]
 
     current_year = date.today().year
-    start_year = str(current_year - 1)
+    start_year = str(current_year - 2)
     end_year = str(current_year)
 
     headers = {'Content-type': 'application/json'}
@@ -227,10 +227,10 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> list:
         url = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
         async with session.post(url, data=payload, headers=headers) as resp:
             if resp.status != 200: # Fallback
-                return [{"name": "Tech", "growth": 0}, {"name": "Healthcare", "growth": 0}]
+                return []
             result = await resp.json()
             if result.get('status') != 'REQUEST_SUCCEEDED':
-                return [{"name": "Tech", "growth": 0}, {"name": "Healthcare", "growth": 0}]
+                return []
 
             series = result.get('Results', {}).get('series', [])
 
@@ -239,8 +239,12 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> list:
                 data = s['data']
                 if len(data) < 5:  # Need at least 1y back (4 quarters prior)
                     continue
-                latest = int(data[0]['value'])
-                prior_year_same_q = int(data[4]['value']) if len(data) > 4 else None
+                try:
+                    latest = int(data[0]['value'])
+                    prior_year_same_q = int(data[4]['value'])
+                except ValueError:
+                    continue # Skip if value is not an integer (e.g. '-')
+
                 if prior_year_same_q and prior_year_same_q > 0:
                     yoy = round(((latest - prior_year_same_q) / prior_year_same_q) * 100, 2)
                     naics = list(major_sectors.keys())[i]
@@ -248,7 +252,7 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> list:
 
             # Top 3 by YoY growth
             top = sorted(sector_growth, key=lambda x: x[0], reverse=True)[:3]
-            return [{"name": name, "growth": growth} for growth, name in top] or [{"name": "Tech", "growth": 0}, {"name": "Healthcare", "growth": 0}]
+            return [{"name": name, "growth": growth} for growth, name in top]
 
 async def fetch_census_data(fips: dict, geo: dict, geo_type: str) -> dict:
     state = fips['state_fips']
@@ -305,9 +309,9 @@ async def fetch_census_data(fips: dict, geo: dict, geo_type: str) -> dict:
         "growth": growth,
         "total_jobs": latest_emp,
         "unemployment_rate": trends[0]['unemp_rate'],
-    "labor_force": trends[0]['labor_force'],
-    "trends": trends
-}
+        "labor_force": trends[0]['labor_force'],
+        "trends": trends
+    }
 def project_census_data(census_data, county_lau_data):
     if not census_data or census_data.get("error") or not census_data.get("trends"):
         return census_data, []

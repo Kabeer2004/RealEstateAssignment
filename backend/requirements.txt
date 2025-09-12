@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+asyncpg
+redis
+aiohttp
+python-dotenv
+pandas
+slowapi

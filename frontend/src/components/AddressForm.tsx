@@ -4,7 +4,7 @@ import React from "react";
 import { useForm, FormProvider, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useIsFetching } from "@tanstack/react-query";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 
@@ -25,6 +25,7 @@ export function AddressForm() {
     useAddressStore();
 
   const isFetching = useIsFetching() > 0;
+  const queryClient = useQueryClient();
 
   const methods = useForm<AddressFormData>({
     resolver: zodResolver(addressSchema),
@@ -43,6 +44,13 @@ export function AddressForm() {
     const addressValues = data.addresses
       .map((a) => a.value)
       .filter((a) => a.trim());
+    if (flushCache) {
+      addressValues.forEach((address) => {
+        queryClient.invalidateQueries({
+          queryKey: ["jobGrowth", address, data.geoType],
+        });
+      });
+    }
     setAddresses(addressValues);
     setGeoType(data.geoType);
   };

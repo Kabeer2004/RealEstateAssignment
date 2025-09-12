@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { motion } from "framer-motion";
 
@@ -52,18 +52,9 @@ export function JobGrowthCard({
         return "bg-secondary text-secondary-foreground";
     }
   };
-  const queryClient = useQueryClient();
   const { data, isLoading, isSuccess, error } = useQuery({
-    queryKey: ["jobGrowth", address, geoType, flushCache],
+    queryKey: ["jobGrowth", address, geoType],
     queryFn: () => fetchJobGrowthData(address, geoType, flushCache),
-    onSuccess: (freshData) => {
-      if (flushCache) {
-        queryClient.setQueryData(
-          ["jobGrowth", address, geoType, false],
-          freshData
-        );
-      }
-    },
     retry: false,
   });
 

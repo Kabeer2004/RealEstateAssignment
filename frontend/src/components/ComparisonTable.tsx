@@ -18,7 +18,7 @@ export function ComparisonTable({
 }) {
   const results = useQueries({
     queries: addresses.map((address) => ({
-      queryKey: ["jobGrowth", address, geoType, false], // Use non-flushed key for comparison view
+      queryKey: ["jobGrowth", address, geoType], // Use non-flushed key for comparison view
       queryFn: () => fetchJobGrowthData(address, geoType, false),
       retry: false,
     })),

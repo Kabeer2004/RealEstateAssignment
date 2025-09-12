@@ -32,8 +32,18 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CardDescription } from "@/components/ui/card";
 
 interface JobGrowthData {
-	stats: { yoy_growth: number; total_jobs: number; top_sectors: string[] };
-	trends: { year: number; value: number }[];
+	growth: {
+		"6mo": number | null;
+		"1y": number | null;
+		"2y": number | null;
+		"5y": number | null;
+	};
+	total_jobs: number;
+	unemployment_rate: number | null;
+	labor_force: number | null;
+	trends: { year: number; value: number; unemp_rate?: number }[];
+	top_sectors: string[];
+	note?: string;
 	geo: {
 		lat: number;
 		lon: number;
@@ -42,6 +52,7 @@ interface JobGrowthData {
 		tract_code: string;
 		error?: string;
 	};
+	error?: string;
 }
 
 const queryClient = new QueryClient();
@@ -224,34 +235,67 @@ function JobGrowthCard({
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					{data.geo.error && (
+					{data.error && (
 						<Alert variant="destructive" className="mb-4">
-							<AlertDescription>
-								{data.geo.error}
-							</AlertDescription>
+							<AlertDescription>{data.error}</AlertDescription>
 						</Alert>
 					)}
-					<div className="grid grid-cols-2 gap-4 mb-4">
-						<div>
-							<p className="text-sm text-muted-foreground">
-								YoY Growth
-							</p>
-							<p className="text-2xl font-bold">
-								{data.stats.yoy_growth}%
-							</p>
-						</div>
+					{data.note && (
+						<Alert className="mb-4">
+							<AlertDescription>{data.note}</AlertDescription>
+						</Alert>
+					)}
+					<div className="grid grid-cols-2 gap-4 mb-4 text-center">
 						<div>
 							<p className="text-sm text-muted-foreground">
 								Total Jobs
 							</p>
 							<p className="text-2xl font-bold">
-								{data.stats.total_jobs.toLocaleString()}
+								{data.total_jobs.toLocaleString()}
+							</p>
+						</div>
+						<div>
+							<p className="text-sm text-muted-foreground">
+								Unemp. Rate
+							</p>
+							<p className="text-2xl font-bold">
+								{data.unemployment_rate}%
+							</p>
+						</div>
+						<div>
+							<p className="text-sm text-muted-foreground">
+								Labor Force
+							</p>
+							<p className="text-2xl font-bold">
+								{data.labor_force?.toLocaleString()}
+							</p>
+						</div>
+						<div>
+							<p className="text-sm text-muted-foreground">
+								1Y Growth
+							</p>
+							<p
+								className={`text-2xl font-bold ${
+									(data.growth["1y"] ?? 0) >= 0
+										? "text-green-600"
+										: "text-red-600"
+								}`}
+							>
+								{data.growth["1y"]}%
 							</p>
 						</div>
 					</div>
+					<div className="text-sm text-muted-foreground mb-2">
+						<p>
+							Growth - 6mo:{" "}
+							<strong>{data.growth["6mo"] ?? "N/A"}%</strong> |
+							2y: <strong>{data.growth["2y"] ?? "N/A"}%</strong> |
+							5y: <strong>{data.growth["5y"] ?? "N/A"}%</strong>
+						</p>
+					</div>
 					<p className="text-sm text-muted-foreground mb-2">
 						Top Sectors:{" "}
-						<strong>{data.stats.top_sectors.join(", ")}</strong>
+						<strong>{data.top_sectors.join(", ")}</strong>
 					</p>
 					<h4 className="font-semibold my-2">Employment Trends</h4>
 					<ResponsiveContainer width="100%" height={200}>

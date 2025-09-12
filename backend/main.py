@@ -4,8 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import aiohttp
 import asyncio
 import redis.asyncio as redis
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
 from datetime import date
 import os
 import json
@@ -14,7 +12,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# Make sure .env is loaded from the same directory as this script
+# Load .env
 load_dotenv()
 
 limiter = Limiter(key_func=get_remote_address)
@@ -24,9 +22,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 BLS_API_KEY = os.getenv("BLS_API_KEY")
 CENSUS_API_KEY = os.getenv("CENSUS_API_KEY")
-
-print (f"BLS_API_KEY: {BLS_API_KEY}")
-print (f"CENSUS_API_KEY: {CENSUS_API_KEY}")
 
 # CORS (Cross-Origin Resource Sharing)
 origins = [
@@ -43,12 +38,7 @@ app.add_middleware(
 )
 
 redis_password = os.getenv("REDIS_PASSWORD")
-if not redis_password:
-    redis_password = None
-
 redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True, password=redis_password)
-engine = create_async_engine(os.getenv('DATABASE_URL'), echo=True)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession)
 
 class AddressInput(BaseModel):
     address: str
@@ -56,14 +46,19 @@ class AddressInput(BaseModel):
 
 async def geocode_address(address: str) -> dict:
     async with aiohttp.ClientSession() as session:
-        url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json"
+        url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&addressdetails=1"
         async with session.get(url) as resp:
             if resp.status != 200:
                 raise HTTPException(status_code=400, detail="Geocoding failed")
             data = await resp.json()
             if not data:
                 raise HTTPException(status_code=404, detail="Address not found by geocoder.")
-            return {"lat": float(data[0]['lat']), "lon": float(data[0]['lon'])}
+            addr = data[0]['address']
+            return {
+                "lat": float(data[0]['lat']),
+                "lon": float(data[0]['lon']),
+                "zip": addr.get('postcode')
+            }
 
 async def get_fips_codes(geo: dict) -> dict:
     lat, lon = geo['lat'], geo['lon']
@@ -74,27 +69,26 @@ async def get_fips_codes(geo: dict) -> dict:
                 raise HTTPException(status_code=424, detail="Failed to retrieve FIPS codes from FCC API.")
             data = await resp.json()
             if not data.get('County') or not data.get('State'):
-                 raise HTTPException(status_code=404, detail="FIPS codes not found for the given address.")
-
+                raise HTTPException(status_code=404, detail="FIPS codes not found for the given address.")
+            block_fips = data['Block']['FIPS']
             return {
                 "state_fips": data['State']['FIPS'],
                 "county_fips": data['County']['FIPS'],
-                "tract_code": data['Block']['FIPS'][5:11] if data.get('Block') else None
+                "tract_code": block_fips[:11]  # state + county + tract
             }
 
-async def fetch_bls_data(county_fips: str) -> dict:
-    BLS_API_KEY = os.getenv("BLS_API_KEY")
-    print (f"Using BLS_API_KEY for fetch_bls_data.")
-       
-    series_id = f"SMU{county_fips}00000000001" # Total Nonfarm
+async def fetch_bls_lau_data(county_fips: str) -> dict:
+    emp_series = f"LAUCN{county_fips}0000000005"  # Employed persons
+    unemp_rate_series = f"LAUCN{county_fips}0000000003"  # Unemployment rate
+    labor_series = f"LAUCN{county_fips}0000000006"  # Labor force
 
     current_year = date.today().year
-    start_year = str(current_year - 2)
+    start_year = str(current_year - 6)  # For 5y trends
     end_year = str(current_year)
 
     headers = {'Content-type': 'application/json'}
     payload = json.dumps({
-        "seriesid": [series_id],
+        "seriesid": [emp_series, unemp_rate_series, labor_series],
         "startyear": start_year,
         "endyear": end_year,
         "registrationkey": BLS_API_KEY,
@@ -107,44 +101,188 @@ async def fetch_bls_data(county_fips: str) -> dict:
         url = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
         async with session.post(url, data=payload, headers=headers) as resp:
             if resp.status != 200:
-                return {"yoy_growth": 2.5, "total_jobs": 100000, "top_sectors": ["Tech", "Healthcare"], "error": f"BLS API request failed with status {resp.status}"}
-
+                return {"error": f"BLS LAU request failed with status {resp.status}"}
             result = await resp.json()
-
             if result.get('status') != 'REQUEST_SUCCEEDED':
-                error_message = result.get('message', ["Unknown error"])[0]
-                return {"yoy_growth": 2.5, "total_jobs": 100000, "top_sectors": ["Tech", "Healthcare"], "error": error_message}
+                return {"error": result.get('message', ["Unknown error"])[0]}
 
-            series = result.get('Results', {}).get('series')
-            if not series or not series[0].get('data'):
-                 return {"yoy_growth": 0, "total_jobs": 0, "top_sectors": [], "error": "No data found for this location in BLS dataset."}
+            series = result.get('Results', {}).get('series', [])
+            if not series:
+                return {"error": "No LAU data found for this location."}
 
-            series_data = series[0]['data']
-            if len(series_data) < 13:
-                 return {"yoy_growth": 0, "total_jobs": int(series_data[0]['value']), "top_sectors": [], "error": "Not enough data for YoY calculation."}
+            emp_data = series[0]['data']
+            unemp_data = series[1]['data']
+            labor_data = series[2]['data']
 
-            latest_month_data = series_data[0]
-            prior_year_data = next((d for d in series_data if d['year'] == str(int(latest_month_data['year']) - 1) and d['period'] == latest_month_data['period']), None)
+            if not emp_data:
+                return {"error": "No employment data available."}
 
-            if not prior_year_data:
-                prior_year_data = series_data[12]
+            # BLS returns recent first; confirm sorted desc
+            emp_data = sorted(emp_data, key=lambda d: (d['year'], d['period']), reverse=True)
+            latest_emp = int(emp_data[0]['value'])
 
-            latest_jobs = int(latest_month_data['value'])
-            prior_year_jobs = int(prior_year_data['value'])
+            # Compute % change over periods (total %; adjust to annualized if needed)
+            def get_growth(data, steps):
+                if len(data) > steps:
+                    ago_value = int(data[steps]['value'])
+                    if ago_value == 0:
+                        return float('inf') if latest_emp > 0 else 0
+                    return round(((latest_emp - ago_value) / ago_value) * 100, 2)
+                return None
 
-            if prior_year_jobs == 0:
-                yoy_growth = float('inf') if latest_jobs > 0 else 0
-            else:
-                yoy_growth = round(((latest_jobs - prior_year_jobs) / prior_year_jobs) * 100, 2)
+            growth = {
+                "6mo": get_growth(emp_data, 5),  # 6 months back
+                "1y": get_growth(emp_data, 11),
+                "2y": get_growth(emp_data, 23),
+                "5y": get_growth(emp_data, 59)
+            }
 
-            # For top sectors, we'd need more series IDs. For now, returning placeholder.
-            return {"yoy_growth": yoy_growth, "total_jobs": latest_jobs, "top_sectors": ["Tech", "Healthcare"]}
+            current_unemp = float(unemp_data[0]['value']) if unemp_data else None
+            current_labor = int(labor_data[0]['value']) if labor_data else None
 
+            # Trends: Yearly average employment
+            from collections import defaultdict
+            yearly_emp = defaultdict(list)
+            for d in emp_data:
+                yearly_emp[d['year']].append(int(d['value']))
+            trends = [{"year": int(y), "value": sum(vals) / len(vals)} for y, vals in sorted(yearly_emp.items(), reverse=True)]
 
-async def fetch_census_data(fips: dict, geo_type: str) -> dict:
-    # Placeholder: Fetch ACS employment data
-    # A real implementation would be complex, involving looping years and parsing.
-    return {"trends": [{"year": 2020, "value": 2.3}, {"year": 2021, "value": 2.5}]}
+            return {
+                "growth": growth,
+                "total_jobs": latest_emp,
+                "unemployment_rate": current_unemp,
+                "labor_force": current_labor,
+                "trends": trends
+            }
+
+async def fetch_bls_qcew_sectors(county_fips: str) -> list:
+    # Major NAICS 2-digit sectors (private ownership)
+    major_sectors = {
+        '11': 'Agriculture',
+        '21': 'Mining',
+        '22': 'Utilities',
+        '23': 'Construction',
+        '31': 'Manufacturing',
+        '42': 'Wholesale Trade',
+        '44': 'Retail Trade',
+        '48': 'Transportation and Warehousing',
+        '51': 'Information',
+        '52': 'Finance and Insurance',
+        '53': 'Real Estate',
+        '54': 'Professional Services',
+        '55': 'Management of Companies',
+        '56': 'Administrative Support',
+        '61': 'Education Services',
+        '62': 'Health Care',
+        '71': 'Arts and Entertainment',
+        '72': 'Accommodation and Food Services',
+        '81': 'Other Services',
+        '92': 'Public Administration'
+    }
+
+    # Series format: ENU + county_fips (5 digits) + '05' (datatype 5 avg monthly emp, size 0) + naics2
+    series_ids = [f"ENU{county_fips}05{naics}" for naics in major_sectors.keys()]
+
+    current_year = date.today().year
+    start_year = str(current_year - 1)
+    end_year = str(current_year)
+
+    headers = {'Content-type': 'application/json'}
+    payload = json.dumps({
+        "seriesid": series_ids,
+        "startyear": start_year,
+        "endyear": end_year,
+        "registrationkey": BLS_API_KEY,
+        "catalog": False,
+        "calculations": True,
+        "annualaverage": False
+    })
+
+    async with aiohttp.ClientSession() as session:
+        url = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+        async with session.post(url, data=payload, headers=headers) as resp:
+            if resp.status != 200:
+                return ["Tech", "Healthcare"]  # Fallback
+            result = await resp.json()
+            if result.get('status') != 'REQUEST_SUCCEEDED':
+                return ["Tech", "Healthcare"]
+
+            series = result.get('Results', {}).get('series', [])
+
+            sector_growth = []
+            for i, s in enumerate(series):
+                data = s['data']
+                if len(data) < 5:  # Need at least 1y back (4 quarters prior)
+                    continue
+                latest = int(data[0]['value'])
+                prior_year_same_q = int(data[4]['value']) if len(data) > 4 else None
+                if prior_year_same_q and prior_year_same_q > 0:
+                    yoy = round(((latest - prior_year_same_q) / prior_year_same_q) * 100, 2)
+                    naics = list(major_sectors.keys())[i]
+                    sector_growth.append((yoy, major_sectors[naics]))
+
+            # Top 3 by YoY growth
+            top = sorted(sector_growth, key=lambda x: x[0], reverse=True)[:3]
+            return [name for _, name in top] or ["Tech", "Healthcare"]
+
+async def fetch_census_data(fips: dict, geo: dict, geo_type: str) -> dict:
+    state = fips['state_fips']
+    county = fips['county_fips'][2:]
+    tract = fips['tract_code'][5:] if 'tract_code' in fips else None  # Tract part after county
+    zip_code = geo.get('zip')
+
+    trends = []
+    for year in range(2018, 2024):
+        get_vars = "B23025_004E,B23025_005E,B23025_001E"  # Employed, unemployed, labor force
+        if geo_type == "tract" and tract:
+            for_clause = f"tract:{tract}"
+            in_clause = f"state:{state} county:{county}"
+        elif geo_type == "zip" and zip_code:
+            for_clause = f"zip code tabulation area:{zip_code}"
+            in_clause = ""
+        elif geo_type == "county":
+            for_clause = f"county:{county}"
+            in_clause = f"state:{state}"
+        else:
+            return {"trends": [], "error": "Invalid geo_type for Census"}
+
+        url = f"https://api.census.gov/data/{year}/acs/acs5?get={get_vars}&for={for_clause}"
+        if in_clause:
+            url += f"&in={in_clause}"
+        if CENSUS_API_KEY:
+            url += f"&key={CENSUS_API_KEY}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    continue
+                data = await resp.json()
+                if len(data) < 2 or any(v is None for v in data[1][:3]):
+                    continue
+                employed, unemployed, labor = map(int, data[1][:3])
+                unemp_rate = round((unemployed / labor * 100) if labor > 0 else 0, 2)
+                trends.append({"year": year, "value": employed, "unemp_rate": unemp_rate, "labor_force": labor})
+
+    trends = sorted(trends, key=lambda x: x['year'], reverse=True)
+    if not trends:
+        return {"trends": [], "error": "No Census data available"}
+
+    latest_emp = trends[0]['value']
+    growth = {}
+    if len(trends) > 1:
+        growth['1y'] = round(((latest_emp - trends[1]['value']) / trends[1]['value']) * 100, 2) if trends[1]['value'] > 0 else None
+    if len(trends) > 2:
+        growth['2y'] = round(((latest_emp - trends[2]['value']) / trends[2]['value']) * 100, 2) if trends[2]['value'] > 0 else None
+    if len(trends) > 5:
+        growth['5y'] = round(((latest_emp - trends[5]['value']) / trends[5]['value']) * 100, 2) if trends[5]['value'] > 0 else None
+
+    return {
+        "growth": growth,
+        "total_jobs": latest_emp,
+        "unemployment_rate": trends[0]['unemp_rate'],
+        "labor_force": trends[0]['labor_force'],
+        "trends": trends
+    }
 
 @app.get("/")
 def read_root():
@@ -153,8 +291,6 @@ def read_root():
 @app.get("/api/job-growth")
 @limiter.limit("10/minute")
 async def get_job_growth(request: Request, address: str, geo_type: str = "tract", flush_cache: bool = False):
-    # For now, we are not using the DB session, but it's set up.
-    # async with AsyncSessionLocal() as db:
     cache_key = f"{address}:{geo_type}"
 
     if flush_cache:
@@ -172,22 +308,32 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
         geo = await geocode_address(address)
         fips = await get_fips_codes(geo)
 
-        # The FCC county_fips is state+county (5 digits), which is what BLS needs.
-        county_fips_for_bls = fips['county_fips']
+        county_fips = fips['state_fips'] + fips['county_fips'][2:]
 
-        bls_data, census_data = await asyncio.gather(
-            fetch_bls_data(county_fips_for_bls),
-            fetch_census_data(fips, geo_type)
-        )
+        # Parallel fetches
+        lau_task = fetch_bls_lau_data(county_fips)
+        qcew_sectors_task = fetch_bls_qcew_sectors(county_fips)
+        census_task = fetch_census_data(fips, geo, geo_type) if geo_type in ['tract', 'zip'] else asyncio.sleep(0)  # Fallback for finer geo
 
-        # Combine geo and fips data for the frontend
+        lau_data, top_sectors, census_data = await asyncio.gather(lau_task, qcew_sectors_task, census_task)
+
+        if 'error' in lau_data:
+            result = census_data if isinstance(census_data, dict) and 'trends' in census_data else {}
+            result['error'] = lau_data['error']
+        else:
+            result = lau_data
+            if isinstance(census_data, dict) and 'total_jobs' in census_data:
+                # Override with finer granularity if available (but note less timely)
+                result['total_jobs'] = census_data['total_jobs']
+                result['unemployment_rate'] = census_data['unemployment_rate']
+                result['labor_force'] = census_data['labor_force']
+                result['note'] = "Finer geo from Census (annual est); growth from county BLS (monthly)"
+
+        result['top_sectors'] = top_sectors
+
+        # Combine geo + fips
         geo_data = {**geo, **fips}
-
-        # If BLS fetch returned an error, include it in the response
-        if 'error' in bls_data:
-            geo_data['error'] = bls_data['error']
-
-        result = {"stats": bls_data, "trends": census_data["trends"], "geo": geo_data}
+        result['geo'] = geo_data
 
         await redis_client.setex(cache_key, 3600, json.dumps(result))
         return result

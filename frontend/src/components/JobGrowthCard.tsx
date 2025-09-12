@@ -20,6 +20,7 @@ import { JobGrowthModalContent } from "@/components/JobGrowthModalContent";
 import { cn } from "@/lib/utils";
 import { JobGrowthData } from "@/lib/types";
 import { useHistoryStore } from "@/lib/historyStore";
+import { useAddressStore } from "@/lib/store";
 import { fetchJobGrowthData } from "@/lib/api";
 
 export function JobGrowthCard({
@@ -35,6 +36,7 @@ export function JobGrowthCard({
   const [startTime, setStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const { addHistoryItem } = useHistoryStore();
+  const { setFlushCache } = useAddressStore();
 
   const getRatingClass = (r?: string) => {
     switch (r?.toLowerCase()) {
@@ -56,6 +58,11 @@ export function JobGrowthCard({
     queryKey: ["jobGrowth", address, geoType],
     queryFn: () => fetchJobGrowthData(address, geoType, flushCache),
     retry: false,
+    onSettled: () => {
+      if (flushCache) {
+        setFlushCache(false);
+      }
+    },
   });
 
   React.useEffect(() => {

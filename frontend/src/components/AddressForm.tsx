@@ -46,7 +46,7 @@ export function AddressForm() {
       .filter((a) => a.trim());
     if (flushCache) {
       addressValues.forEach((address) => {
-        queryClient.invalidateQueries({
+        queryClient.removeQueries({
           queryKey: ["jobGrowth", address, data.geoType],
         });
       });

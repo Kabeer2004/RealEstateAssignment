@@ -1,10 +1,12 @@
 import os
 from dotenv import load_dotenv
 from slowapi import Limiter
+from pathlib import Path
 from slowapi.util import get_remote_address
 
 # Load .env
-load_dotenv()
+dotenv_path = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(dotenv_path=dotenv_path)
 
 # Rate Limiter
 limiter = Limiter(key_func=get_remote_address)

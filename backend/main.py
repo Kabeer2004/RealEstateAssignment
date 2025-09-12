@@ -650,6 +650,7 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
                         **(acs_other_data if isinstance(acs_other_data, dict) else {}),
                 }
                 notes.append("Granular data from Census is less timely (annual estimates) than county-level BLS data (monthly).")
+                notes.append("Exact tract boundaries are not available. 1 mile radius shown for reference.")
                 notes.extend(projection_notes)
             else:
                 granular_data = {"error": census_emp_data.get("error") if isinstance(census_emp_data, dict) else "Unknown error"}

@@ -436,10 +436,11 @@ function JobGrowthCard({
 
 	if (!data) return null;
 
-	const { granular_data, county_context, cre_summary } = data;
+	const { geo, granular_data, county_context, cre_summary } = data;
 	const hasGranularData = granular_data && !granular_data.error;
 
 	const mainData = hasGranularData ? granular_data : county_context;
+
 
 	const growth1Y = mainData?.growth?.["1y"];
 	const wageGrowth1Y = county_context?.wage_data?.wage_growth?.["1y"];
@@ -458,7 +459,8 @@ function JobGrowthCard({
 					<CardHeader>
 						<CardTitle>{address}</CardTitle>
 						<CardDescription>
-							{geoType.toUpperCase()}
+							{geoType.toUpperCase()} &middot; {geo.lat.toFixed(4)},{" "}
+							{geo.lon.toFixed(4)}
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -516,7 +518,7 @@ function JobGrowthCard({
 				</Card>
 			</motion.div>
 			<Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-				<JobGrowthModalContent data={data} geoType={geoType} />
+				<JobGrowthModalContent address={address} data={data} geoType={geoType} />
 			</Modal>
 		</>
 	);
@@ -646,24 +648,34 @@ function ComparisonTable({
 				<div className="sticky top-0 left-0 z-20 p-4 font-semibold bg-card border-b border-r">
 					Attribute
 				</div>
-				{results.map((result, index) => (
-					<div
-						key={index}
-						className="sticky top-0 z-10 p-4 font-semibold bg-card border-b truncate"
-					>
-						{result.isLoading ? (
-							<Skeleton className="h-6 w-3/4" />
-						) : result.isError ? (
-							"Error"
-						) : result.data?.geo?.lat ? (
-							`${result.data.geo.lat.toFixed(
-								4
-							)}, ${result.data.geo.lon.toFixed(4)}`
-						) : (
-							"Unknown Address"
-						)}
-					</div>
-				))}
+				{results.map((result, index) => {
+					const address = addresses[index];
+					const truncatedAddress =
+						address.length > 25
+							? `${address.substring(0, 22)}...`
+							: address;
+					return (
+						<div
+							key={index}
+							className="sticky top-0 z-10 p-4 font-semibold bg-card border-b"
+						>
+							{result.isLoading ? (
+								<Skeleton className="h-10 w-full" />
+							) : result.isError ? (
+								<div className="text-destructive text-sm">Error</div>
+							) : (
+								<div className="flex flex-col">
+									<span className="truncate" title={address}>{truncatedAddress}</span>
+									{result.data?.geo && (
+										<span className="text-xs font-normal text-muted-foreground">
+											{result.data.geo.lat.toFixed(4)}, {result.data.geo.lon.toFixed(4)}
+										</span>
+									)}
+								</div>
+							)}
+						</div>
+					);
+				})}
 
 				{/* Attribute Rows */}
 				{attributes.map((attr) => (
@@ -989,9 +1001,11 @@ function CRESummaryDisplay({ summary }: { summary?: CRESummary }) {
 }
 
 function JobGrowthModalContent({
+	address,
 	data,
 	geoType,
 }: {
+	address: string;
 	data: JobGrowthData;
 	geoType: "tract" | "zip" | "county";
 }) {
@@ -1008,11 +1022,10 @@ function JobGrowthModalContent({
 	return (
 		<>
 			<CardHeader className="pt-0 px-0">
-				<CardTitle>
-					{geo.lat}, {geo.lon}
-				</CardTitle>
+				<CardTitle>{address}</CardTitle>
 				<CardDescription>
-					{geoType.toUpperCase()} Level Analysis
+					{geoType.toUpperCase()} Level Analysis &middot; {geo.lat.toFixed(4)},{" "}
+					{geo.lon.toFixed(4)}
 				</CardDescription>
 			</CardHeader>
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">

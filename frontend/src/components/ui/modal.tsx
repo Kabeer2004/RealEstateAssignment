@@ -32,7 +32,9 @@ export function Modal({ isOpen, onClose, children, className }: ModalProps) {
             className={cn('relative w-full max-w-4xl bg-card rounded-lg shadow-xl overflow-hidden', className)}
           >
             <button onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground z-10"><X className="size-5" /></button>
-            <div className="max-h-[90vh] overflow-y-auto p-6">{children}</div>
+            <div className="max-h-[90vh] overflow-y-auto p-4 md:p-6">
+              {children}
+            </div>
           </motion.div>
         </motion.div>
       )}

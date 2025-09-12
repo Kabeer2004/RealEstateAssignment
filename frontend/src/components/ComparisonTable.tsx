@@ -124,7 +124,7 @@ export function ComparisonTable({
       <div
         className="relative grid"
         style={{
-          gridTemplateColumns: `minmax(200px, 1fr) repeat(${results.length}, minmax(300px, 1fr))`,
+          gridTemplateColumns: `minmax(150px, 1fr) repeat(${results.length}, minmax(240px, 1fr))`,
         }}
       >
         {/* Header Row */}

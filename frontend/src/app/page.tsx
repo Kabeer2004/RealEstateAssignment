@@ -1,10 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { LayoutGrid, Rows3, Search } from "lucide-react";
 
@@ -15,6 +12,7 @@ import { JobGrowthCard } from "@/components/JobGrowthCard";
 import { ComparisonTable } from "@/components/ComparisonTable";
 import { Sheet } from "@/components/ui/sheet";
 import { SearchPanel } from "@/components/SearchPanel";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +35,7 @@ function HomePage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold sm:text-3xl">Market Analysis</h1>
           <div className="flex items-center gap-2">
+            <ThemeSwitcher />
             <Button
               variant={view === "explore" ? "secondary" : "ghost"}
               size="icon"

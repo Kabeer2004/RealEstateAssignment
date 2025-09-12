@@ -21,8 +21,11 @@ async def fetch_acs_data(fips: dict, geo: dict, geo_type: str) -> dict:
     elif geo_type == "zip" and zip_code:
         for_clause = f"zip code tabulation area:{zip_code}"
         in_clause = ""
-    else: # County or invalid
-        return {"error": "ACS data is for granular geographies only"}
+    elif geo_type == "county":
+        for_clause = f"county:{county}"
+        in_clause = f"state:{state}"
+    else: # Invalid
+        return {"error": f"Unsupported geo_type for ACS data: {geo_type}"}
 
     year = 2023 # Latest reliable ACS 5-year data
     url = f"https://api.census.gov/data/{year}/acs/acs5?get={get_vars}&for={for_clause}"

@@ -58,6 +58,7 @@ export function JobGrowthCard({
     queryKey: ["jobGrowth", address, geoType],
     queryFn: () => fetchJobGrowthData(address, geoType, flushCache),
     retry: false,
+    staleTime: 1000 * 60 * 5, // 5 minutes
     onSettled: () => {
       if (flushCache) {
         setFlushCache(false);
@@ -111,16 +112,18 @@ export function JobGrowthCard({
     );
 
   if (error) {
-    const errorMessage =
-      axios.isAxiosError(error) && error.response
-        ? `${error.response.status}: ${error.response.data.detail}`
-        : error.message;
+    let errorMessage: string;
+    if (axios.isAxiosError(error) && error.response) {
+      const { status, data } = error.response;
+      const detail = typeof data === "object" && data?.detail ? data.detail : data;
+      errorMessage = `${status}: ${detail}`;
+    } else {
+      errorMessage = error.message;
+    }
     return (
       <Alert variant="destructive">
         <AlertTitle>{address}</AlertTitle>
-        <AlertDescription>
-          Failed to fetch data: {errorMessage}
-        </AlertDescription>
+        <AlertDescription>Failed to fetch data: {errorMessage}</AlertDescription>
       </Alert>
     );
   }

@@ -21,6 +21,7 @@ export function ComparisonTable({
       queryKey: ["jobGrowth", address, geoType], // Use non-flushed key for comparison view
       queryFn: () => fetchJobGrowthData(address, geoType, false),
       retry: false,
+      staleTime: 1000 * 60 * 5, // 5 minutes
     })),
   });
 
@@ -174,9 +175,14 @@ export function ComparisonTable({
                 ) : result.isError ? (
                   <Alert variant="destructive" className="p-2">
                     <AlertDescription>
-                      {axios.isAxiosError(result.error)
-                        ? result.error.response?.data?.detail
-                        : result.error.message}
+                      {(() => {
+                        if (axios.isAxiosError(result.error) && result.error.response) {
+                          const { data } = result.error.response;
+                          const detail = typeof data === "object" && data?.detail ? data.detail : data;
+                          return detail;
+                        }
+                        return result.error.message;
+                      })()}
                     </AlertDescription>
                   </Alert>
                 ) : (

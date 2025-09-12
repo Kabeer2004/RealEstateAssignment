@@ -54,7 +54,7 @@ export function JobGrowthModalContent({
             </Alert>
           )}
 
-          {hasCountyData && geoType !== "county" && (
+          {hasCountyData && (
             <DataDisplay data={county_context} title="County Level Context" />
           )}
           {county_context?.error && (

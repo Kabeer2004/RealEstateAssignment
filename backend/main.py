@@ -65,15 +65,9 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
             fetch_bls_qcew_sectors(county_fips), # Now fetches sectors and wages
             fetch_national_employment_data(),
             calculate_downturn_resilience(county_fips),
+            fetch_census_data(fips, geo, geo_type), # Granular employment
+            fetch_acs_data(fips, geo, geo_type) # Granular income, education, etc.
         ]
-
-        granular_tasks_added = False
-        if geo_type in ['tract', 'zip']:
-            tasks.extend([
-                fetch_census_data(fips, geo, geo_type), # Granular employment
-                fetch_acs_data(fips, geo, geo_type) # Granular income, education, etc.
-            ])
-            granular_tasks_added = True
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -84,15 +78,11 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
         qcew_data = get_result(1, {"error": "Failed to fetch QCEW data"})
         national_data = get_result(2, {"error": "Failed to fetch national data"})
         resilience_data = get_result(3, {"error": "Failed to fetch resilience data"})
-
-        census_emp_data = None
-        acs_other_data = None
-        if granular_tasks_added:
-            census_emp_data = get_result(4, {"error": "Failed to fetch Census employment"})
-            acs_other_data = get_result(5, {"error": "Failed to fetch ACS demographics"})
+        census_emp_data = get_result(4, {"error": "Failed to fetch Census employment"})
+        acs_other_data = get_result(5, {"error": "Failed to fetch ACS demographics"})
 
         projection_notes = []
-        if granular_tasks_added and isinstance(census_emp_data, dict) and isinstance(lau_data, dict):
+        if geo_type in ['tract', 'zip'] and isinstance(census_emp_data, dict) and isinstance(lau_data, dict):
             census_emp_data, projection_notes = project_census_data(census_emp_data, lau_data)
 
         notes = []
@@ -110,18 +100,18 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
             county_context = {"error": lau_data["error"]}
 
         granular_data = None
-        if granular_tasks_added:
-            if isinstance(census_emp_data, dict) and 'error' not in census_emp_data:
-                granular_data = {
-                        "source": "Census ACS 5-Year (Annual)",
-                        **census_emp_data,
-                        **(acs_other_data if isinstance(acs_other_data, dict) else {}),
-                }
+        if isinstance(census_emp_data, dict) and 'error' not in census_emp_data:
+            granular_data = {
+                    "source": "Census ACS 5-Year (Annual)",
+                    **census_emp_data,
+                    **(acs_other_data if isinstance(acs_other_data, dict) else {}),
+            }
+            if geo_type in ['tract', 'zip']:
                 notes.append("Granular data from Census is less timely (annual estimates) than county-level BLS data (monthly).")
                 notes.append("Exact tract boundaries are not available. 1 mile radius shown for reference.")
-                notes.extend(projection_notes)
-            else:
-                granular_data = {"error": census_emp_data.get("error") if isinstance(census_emp_data, dict) else "Unknown error"}
+            notes.extend(projection_notes)
+        else:
+            granular_data = {"error": census_emp_data.get("error") if isinstance(census_emp_data, dict) else "Unknown error"}
 
         # CRE Summary
         cre_summary = {
@@ -131,10 +121,6 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
             "recession_resilience": resilience_data.get('resilience_rating', 'Unknown') if not resilience_data.get("error") else "Unknown",
             "vs_national_performance": "outperforming" if any(v.get('outperforming', False) for v in county_context.get("comparative_performance", {}).values()) else "underperforming",
         }
-
-        if geo_type == 'county' and county_context:
-            granular_data = county_context
-            county_context = None
 
         result = {
             "geo": {**geo, **fips},

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
+import { type StylesConfig } from "react-select";
 
 import { useAddressStore } from "@/lib/store";
 import { addressSchema } from "@/lib/schema";
@@ -19,6 +20,48 @@ type AddressFormData = z.infer<typeof addressSchema>;
 
 // Dynamically import react-select to prevent SSR hydration errors
 const ClientOnlySelect = dynamic(() => import("react-select"), { ssr: false });
+
+const customSelectStyles: StylesConfig = {
+  control: (base, { isFocused }) => ({
+    ...base,
+    backgroundColor: "var(--card)",
+    borderColor: isFocused ? "var(--ring)" : "var(--border)",
+    boxShadow: isFocused ? "0 0 0 1px var(--ring)" : "none",
+    "&:hover": {
+      borderColor: "var(--ring)",
+    },
+  }),
+  menu: (base) => ({
+    ...base,
+    backgroundColor: "var(--popover)",
+    color: "var(--popover-foreground)",
+    border: "1px solid var(--border)",
+  }),
+  option: (base, { isFocused, isSelected }) => ({
+    ...base,
+    backgroundColor: isSelected
+      ? "var(--primary)"
+      : isFocused
+      ? "var(--accent)"
+      : "var(--popover)",
+    color: isSelected ? "var(--primary-foreground)" : "var(--foreground)",
+    "&:active": {
+      backgroundColor: "var(--accent)",
+    },
+  }),
+  singleValue: (base) => ({
+    ...base,
+    color: "var(--foreground)",
+  }),
+  input: (base) => ({
+    ...base,
+    color: "var(--foreground)",
+  }),
+  indicatorSeparator: (base) => ({
+    ...base,
+    backgroundColor: "var(--border)",
+  }),
+};
 
 export function AddressForm() {
   const { setAddresses, setGeoType, flushCache, setFlushCache } =
@@ -124,6 +167,8 @@ export function AddressForm() {
               value: "tract",
               label: "Census Tract",
             }}
+            styles={customSelectStyles}
+            classNamePrefix="custom-select"
           />
         </div>
 

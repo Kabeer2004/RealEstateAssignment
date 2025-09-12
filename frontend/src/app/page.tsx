@@ -3,13 +3,14 @@
 import React, { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { LayoutGrid, Rows3, Search } from "lucide-react";
+import { Info, LayoutGrid, Rows3, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAddressStore } from "@/lib/store";
 import { JobGrowthCard } from "@/components/JobGrowthCard";
 import { ComparisonTable } from "@/components/ComparisonTable";
+import { InfoModal } from "@/components/InfoModal";
 import { Sheet } from "@/components/ui/sheet";
 import { SearchPanel } from "@/components/SearchPanel";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
@@ -28,6 +29,7 @@ function HomePage() {
   const { addresses, geoType, flushCache } = useAddressStore();
   const [view, setView] = useState<"explore" | "compare">("explore");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -36,6 +38,14 @@ function HomePage() {
           <h1 className="text-2xl font-bold sm:text-3xl">Market Analysis</h1>
           <div className="flex items-center gap-2">
             <ThemeSwitcher />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsInfoModalOpen(true)}
+              aria-label="Information"
+            >
+              <Info className="size-4" />
+            </Button>
             <Button
               variant={view === "explore" ? "secondary" : "ghost"}
               size="icon"
@@ -100,6 +110,11 @@ function HomePage() {
           </motion.div>
         </AnimatePresence>
       </main>
+
+      <InfoModal
+        isOpen={isInfoModalOpen}
+        onClose={() => setIsInfoModalOpen(false)}
+      />
       <Sheet isOpen={isSheetOpen} onClose={() => setIsSheetOpen(false)}>
         <div className="w-full max-w-sm p-6 overflow-y-auto">
           <SearchPanel />

@@ -87,6 +87,7 @@ export function JobGrowthModalContent({
                   helpText={`1Y Growth: ${
                     county_context.wage_data.wage_growth?.["1y"] ?? "N/A"
                   }%`}
+                  source="BLS QCEW"
                 />
               )}
             {hasGranularData &&
@@ -103,6 +104,7 @@ export function JobGrowthModalContent({
                     }
                   )}
                   helpText={`Data from ${granular_data.income_data.data_year}`}
+                  source="Census ACS"
                 />
               )}
             {hasGranularData &&
@@ -115,6 +117,7 @@ export function JobGrowthModalContent({
                       .labor_force_participation_rate
                   }
                   unit="%"
+                  source="Census ACS"
                 />
               )}
             {hasGranularData &&
@@ -125,6 +128,7 @@ export function JobGrowthModalContent({
                   value={granular_data.education_data.percent_college_educated}
                   unit="%"
                   rating={granular_data.education_data.workforce_quality_rating}
+                  source="Census ACS"
                 />
               )}
             {hasCountyData &&
@@ -135,6 +139,7 @@ export function JobGrowthModalContent({
                   value={county_context.downturn_resilience.resilience_score}
                   rating={county_context.downturn_resilience.resilience_rating}
                   helpText="0-100, higher is better"
+                  source="BLS LAU (Annual)"
                 />
               )}
           </div>

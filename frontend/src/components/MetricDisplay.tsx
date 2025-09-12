@@ -9,12 +9,14 @@ export function MetricDisplay({
   unit = "",
   rating,
   helpText,
+  source,
 }: {
   title: string;
   value?: string | number;
   unit?: string;
   rating?: string;
   helpText?: string;
+  source?: string;
 }) {
   if (value === undefined || value === null) return null;
 
@@ -49,8 +51,11 @@ export function MetricDisplay({
           </Badge>
         )}
       </div>
-      {helpText && (
-        <div className="text-xs text-muted-foreground mt-1">{helpText}</div>
+      {(helpText || source) && (
+        <div className="flex justify-between items-center mt-1 text-xs text-muted-foreground">
+          <span>{helpText}</span>
+          <span className="font-medium">{source}</span>
+        </div>
       )}
     </div>
   );

@@ -137,23 +137,34 @@ async def fetch_bls_lau_data(county_fips: str) -> dict:
                 "5y": get_growth(emp_data, 59)
             }
 
-            current_unemp = float(unemp_data[0]['value']) if unemp_data else None
-            current_labor = int(labor_data[0]['value']) if labor_data else None
+        current_unemp = float(unemp_data[0]['value']) if unemp_data else None
+        current_labor = int(labor_data[0]['value']) if labor_data else None
 
-            # Trends: Yearly average employment
-            from collections import defaultdict
-            yearly_emp = defaultdict(list)
-            for d in emp_data:
-                yearly_emp[d['year']].append(int(d['value']))
-            trends = [{"year": int(y), "value": sum(vals) / len(vals)} for y, vals in sorted(yearly_emp.items(), reverse=True)]
+        # Trends: Yearly averages
+        from collections import defaultdict
+        def calculate_yearly_trends(data_series):
+            yearly_data = defaultdict(list)
+            for d in data_series:
+                try:
+                    yearly_data[d['year']].append(float(d['value']))
+                except (ValueError, TypeError):
+                    continue
+            return [{"year": int(y), "value": sum(vals) / len(vals)} for y, vals in sorted(yearly_data.items(), reverse=True)]
 
-            return {
-                "growth": growth,
+        emp_trends = calculate_yearly_trends(emp_data)
+        unemp_rate_trends = calculate_yearly_trends(unemp_data)
+        labor_force_trends = calculate_yearly_trends(labor_data)
+
+        return {
+            "growth": growth,
                 "total_jobs": latest_emp,
-                "unemployment_rate": current_unemp,
-                "labor_force": current_labor,
-                "trends": trends
-            }
+            "unemployment_rate": current_unemp,
+            "labor_force": current_labor,
+            "trends": emp_trends, # For backward compatibility
+            "employment_trends": emp_trends,
+            "unemployment_rate_trends": unemp_rate_trends,
+            "labor_force_trends": labor_force_trends,
+        }
 
 async def fetch_bls_qcew_sectors(county_fips: str) -> list:
     # Major NAICS 2-digit sectors (private ownership)
@@ -280,9 +291,96 @@ async def fetch_census_data(fips: dict, geo: dict, geo_type: str) -> dict:
         "growth": growth,
         "total_jobs": latest_emp,
         "unemployment_rate": trends[0]['unemp_rate'],
-        "labor_force": trends[0]['labor_force'],
-        "trends": trends
-    }
+    "labor_force": trends[0]['labor_force'],
+    "trends": trends
+}
+def project_census_data(census_data, county_lau_data):
+    if not census_data or census_data.get("error") or not census_data.get("trends"):
+        return census_data, []
+    if not county_lau_data or county_lau_data.get("error"):
+        return census_data, []
+
+    census_trends = census_data["trends"]
+    last_census_year = census_trends[0]['year']
+    last_census_datapoint = census_trends[0]
+
+    county_emp_trends = {t['year']: t['value'] for t in county_lau_data.get("employment_trends", [])}
+    county_labor_trends = {t['year']: t['value'] for t in county_lau_data.get("labor_force_trends", [])}
+
+    latest_county_year = 0
+    if county_emp_trends:
+        latest_county_year = max(county_emp_trends.keys())
+
+    if latest_county_year <= last_census_year:
+        return census_data, []
+
+    # Calculate county growth rates
+    county_emp_growth = {}
+    sorted_emp_years = sorted(county_emp_trends.keys())
+    for i in range(1, len(sorted_emp_years)):
+        year = sorted_emp_years[i]
+        prev_year = sorted_emp_years[i-1]
+        if county_emp_trends.get(prev_year, 0) > 0:
+            growth = (county_emp_trends[year] - county_emp_trends[prev_year]) / county_emp_trends[prev_year]
+            county_emp_growth[year] = growth
+
+    county_labor_growth = {}
+    sorted_labor_years = sorted(county_labor_trends.keys())
+    for i in range(1, len(sorted_labor_years)):
+        year = sorted_labor_years[i]
+        prev_year = sorted_labor_years[i-1]
+        if county_labor_trends.get(prev_year, 0) > 0:
+            growth = (county_labor_trends[year] - county_labor_trends[prev_year]) / county_labor_trends[prev_year]
+            county_labor_growth[year] = growth
+
+    projected_trends = []
+    last_known_employed = last_census_datapoint['value']
+    last_known_labor = last_census_datapoint['labor_force']
+
+    for year_to_project in range(last_census_year + 1, latest_county_year + 1):
+        emp_growth_rate = county_emp_growth.get(year_to_project, 0)
+        labor_growth_rate = county_labor_growth.get(year_to_project, 0)
+
+        projected_employed = last_known_employed * (1 + emp_growth_rate)
+        projected_labor = last_known_labor * (1 + labor_growth_rate)
+
+        projected_unemployed = projected_labor - projected_employed
+        projected_unemp_rate = round((projected_unemployed / projected_labor) * 100, 2) if projected_labor > 0 else 0
+
+        projected_trends.append({
+            "year": year_to_project,
+            "value": round(projected_employed),
+            "unemp_rate": projected_unemp_rate,
+            "labor_force": round(projected_labor),
+            "projected": True
+        })
+
+        last_known_employed = projected_employed
+        last_known_labor = projected_labor
+
+    if not projected_trends:
+        return census_data, []
+
+    all_trends = census_trends + projected_trends
+    all_trends.sort(key=lambda x: x['year'], reverse=True)
+
+    latest_data = all_trends[0]
+    census_data['total_jobs'] = latest_data['value']
+    census_data['unemployment_rate'] = latest_data['unemp_rate']
+    census_data['labor_force'] = latest_data['labor_force']
+
+    latest_emp = latest_data['value']
+    growth = {}
+    trends_by_year = {t['year']: t['value'] for t in all_trends}
+    for y in [1, 2, 5]:
+        prev_year_val = trends_by_year.get(latest_data['year'] - y)
+        if prev_year_val and prev_year_val > 0:
+            growth[f'{y}y'] = round(((latest_emp - prev_year_val) / prev_year_val) * 100, 2)
+    census_data['growth'] = growth
+    census_data['trends'] = all_trends
+
+    projection_note = "Recent years' data for this geography are projected based on county-level trends from BLS."
+    return census_data, [projection_note]
 
 @app.get("/")
 def read_root():
@@ -322,8 +420,14 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
             census_task_added = True
 
         results = await asyncio.gather(*tasks)
-        lau_data, top_sectors = results[0], results[1]
+        # Extract results based on whether census_task was added
+        lau_data = results[0]
+        top_sectors = results[1]
         census_data = results[2] if census_task_added else None
+
+        projection_notes = []
+        if census_task_added and isinstance(census_data, dict) and isinstance(lau_data, dict):
+            census_data, projection_notes = project_census_data(census_data, lau_data)
 
         notes = []
         county_context = None
@@ -340,26 +444,27 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
         if isinstance(census_data, dict):
             if 'error' not in census_data:
                 granular_data = {
-                    "source": "Census ACS 5-Year (Annual)",
-                    **census_data,
+                        "source": "Census ACS 5-Year (Annual)",
+                        **census_data,
                     "top_sectors_growing": [],  # Census fetch doesn't do sectors yet
                 }
                 notes.append("Granular data from Census is less timely (annual estimates) than county-level BLS data (monthly).")
+                notes.extend(projection_notes)
             elif census_data.get("error"):
                 granular_data = {"error": census_data["error"]}
 
-        if geo_type == 'county' and county_context:
-            granular_data = county_context
-            county_context = None
+            if geo_type == 'county' and county_context:
+                granular_data = county_context
+                county_context = None
 
-        result = {
-            "geo": {**geo, **fips},
-            "county_context": county_context,
-            "granular_data": granular_data,
-            "notes": notes,
-        }
-        await redis_client.setex(cache_key, 3600, json.dumps(result))
-        return result
+            result = {
+                "geo": {**geo, **fips},
+                "county_context": county_context,
+                "granular_data": granular_data,
+                "notes": notes,
+            }
+            await redis_client.setex(cache_key, 3600, json.dumps(result))
+            return result
     except HTTPException as e:
         raise e
     except Exception as e:

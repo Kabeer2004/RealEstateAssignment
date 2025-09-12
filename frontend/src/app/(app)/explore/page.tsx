@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Fragment, useState } from "react";
+import React, { Fragment, useState } from "react";
 import { useForm, FormProvider, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,6 +21,7 @@ import axios from "axios";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
+	Legend,
 	LineChart,
 	Line,
 	XAxis,
@@ -54,7 +55,7 @@ interface DataPayload {
 	labor_force?: number;
 	growth: Growth;
 	top_sectors_growing: Sector[];
-	trends: { year: number; value: number }[];
+	trends: { year: number; value: number; projected?: boolean }[];
 	error?: string;
 }
 
@@ -103,7 +104,9 @@ function AddressForm() {
 	});
 
 	const onSubmit = (data: AddressFormData) => {
-		const addressValues = data.addresses.map((a) => a.value).filter((a) => a.trim());
+		const addressValues = data.addresses
+			.map((a) => a.value)
+			.filter((a) => a.trim());
 		setAddresses(addressValues);
 		setGeoType(data.geoType);
 	};
@@ -118,34 +121,57 @@ function AddressForm() {
 				className="space-y-6"
 			>
 				<div>
-					<label className="block text-sm font-medium mb-2">Addresses</label>
+					<label className="block text-sm font-medium mb-2">
+						Addresses
+					</label>
 					<div className="space-y-2">
 						{fields.map((field, index) => (
-							<div key={field.id} className="flex items-center gap-2">
+							<div
+								key={field.id}
+								className="flex items-center gap-2"
+							>
 								<Input
-									{...methods.register(`addresses.${index}.value`)}
+									{...methods.register(
+										`addresses.${index}.value`
+									)}
 									placeholder={`Address ${index + 1}`}
 									className="flex-grow"
 								/>
-								<Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} disabled={fields.length <= 1}>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									onClick={() => remove(index)}
+									disabled={fields.length <= 1}
+								>
 									<X className="size-4" />
 								</Button>
 							</div>
 						))}
 					</div>
-					<Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => append({ value: "" })}>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						className="mt-2"
+						onClick={() => append({ value: "" })}
+					>
 						<Plus className="mr-2 size-4" />
 						Add Address
 					</Button>
 					{methods.formState.errors.addresses && (
 						<p className="text-red-500 text-sm mt-1">
-							{methods.formState.errors.addresses.message || methods.formState.errors.addresses.root?.message}
+							{methods.formState.errors.addresses.message ||
+								methods.formState.errors.addresses.root
+									?.message}
 						</p>
 					)}
 				</div>
 
 				<div>
-					<label className="block text-sm font-medium mb-2">Geography Level</label>
+					<label className="block text-sm font-medium mb-2">
+						Geography Level
+					</label>
 					<ClientOnlySelect
 						options={[
 							{ value: "tract", label: "Census Tract" },
@@ -153,7 +179,9 @@ function AddressForm() {
 							{ value: "county", label: "County" },
 						]}
 						onChange={(opt) => {
-							const geoTypeValue = (opt?.value as "tract" | "zip" | "county") || "tract";
+							const geoTypeValue =
+								(opt?.value as "tract" | "zip" | "county") ||
+								"tract";
 							methods.setValue("geoType", geoTypeValue);
 							setGeoType(geoTypeValue);
 						}}
@@ -165,8 +193,17 @@ function AddressForm() {
 				</div>
 
 				<div className="flex items-center space-x-2">
-					<Checkbox id="flush-cache" checked={flushCache} onCheckedChange={(checked) => setFlushCache(Boolean(checked))} />
-					<label htmlFor="flush-cache" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+					<Checkbox
+						id="flush-cache"
+						checked={flushCache}
+						onCheckedChange={(checked) =>
+							setFlushCache(Boolean(checked))
+						}
+					/>
+					<label
+						htmlFor="flush-cache"
+						className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+					>
 						Force Refresh (Flush Cache)
 					</label>
 				</div>
@@ -201,7 +238,9 @@ function JobGrowthPage() {
 			</div>
 			<aside className="w-96 p-6 bg-sidebar border-l border-sidebar-border overflow-y-auto">
 				<div className="sticky top-0">
-					<h2 className="text-xl font-semibold mb-4">Market Search</h2>
+					<h2 className="text-xl font-semibold mb-4">
+						Market Search
+					</h2>
 					<AddressForm />
 				</div>
 			</aside>
@@ -271,19 +310,34 @@ function JobGrowthCard({
 
 	return (
 		<>
-			<motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}>
-				<Card onClick={() => setIsModalOpen(true)} className="cursor-pointer hover:shadow-lg transition-shadow">
+			<motion.div
+				initial={{ scale: 0.95 }}
+				animate={{ scale: 1 }}
+				exit={{ scale: 0.95 }}
+			>
+				<Card
+					onClick={() => setIsModalOpen(true)}
+					className="cursor-pointer hover:shadow-lg transition-shadow"
+				>
 					<CardHeader>
 						<CardTitle>{address}</CardTitle>
-						<CardDescription>{geoType.toUpperCase()}</CardDescription>
+						<CardDescription>
+							{geoType.toUpperCase()}
+						</CardDescription>
 					</CardHeader>
 					<CardContent>
 						{mainData && (
 							<div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 								<div className="font-medium">Total Jobs:</div>
-								<div>{(mainData.total_jobs ?? 0).toLocaleString()}</div>
+								<div>
+									{(
+										mainData.total_jobs ?? 0
+									).toLocaleString()}
+								</div>
 								<div className="font-medium">Unemployment:</div>
-								<div>{mainData.unemployment_rate?.toFixed(1)}%</div>
+								<div>
+									{mainData.unemployment_rate?.toFixed(1)}%
+								</div>
 							</div>
 						)}
 					</CardContent>
@@ -297,6 +351,34 @@ function JobGrowthCard({
 }
 
 function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
+	const chartData = React.useMemo(() => {
+		if (!data.trends || data.trends.length === 0) return [];
+		const sortedTrends = [...data.trends].reverse(); // chart needs ascending years
+		const lastActualPointIndex = sortedTrends.findLastIndex(
+			(p) => !p.projected
+		);
+
+		return sortedTrends.map((d, i) => {
+			const point: any = {
+				year: d.year,
+				value: d.value,
+				actual: null,
+				projected: null,
+			};
+			if (d.projected) {
+				point.projected = d.value;
+			} else {
+				point.actual = d.value;
+			}
+			if (
+				i === lastActualPointIndex &&
+				lastActualPointIndex < sortedTrends.length - 1
+			) {
+				point.projected = d.value;
+			}
+			return point;
+		});
+	}, [data.trends]);
 	return (
 		<div className="p-4 border rounded-lg">
 			<h3 className="font-semibold text-lg mb-1">{title}</h3>
@@ -311,29 +393,73 @@ function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
 				<div>{(data.labor_force ?? 0).toLocaleString()}</div>
 			</div>
 
-			{data.top_sectors_growing && data.top_sectors_growing.length > 0 && (
-				<div>
-					<p className="text-sm text-muted-foreground mb-2">Top Growing Sectors (YoY):</p>
-					<div className="flex flex-wrap gap-1 mb-4">
-						{data.top_sectors_growing.map((sector) => (
-							<Badge key={sector.name} variant={sector.growth > 0 ? "default" : "secondary"}>
-								{sector.name}: {sector.growth}%
-							</Badge>
-						))}
+			{data.top_sectors_growing &&
+				data.top_sectors_growing.length > 0 && (
+					<div>
+						<p className="text-sm text-muted-foreground mb-2">
+							Top Growing Sectors (YoY):
+						</p>
+						<div className="flex flex-wrap gap-1 mb-4">
+							{data.top_sectors_growing.map((sector) => (
+								<Badge
+									key={sector.name}
+									variant={
+										sector.growth > 0
+											? "default"
+											: "secondary"
+									}
+								>
+									{sector.name}: {sector.growth}%
+								</Badge>
+							))}
+						</div>
 					</div>
-				</div>
-			)}
+				)}
 
 			{data.trends && data.trends.length > 0 && (
 				<div>
 					<h4 className="font-semibold my-2">Employment Trend</h4>
 					<ResponsiveContainer width="100%" height={200}>
-						<LineChart data={data.trends} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+						<LineChart
+							data={chartData}
+							margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
+						>
 							<CartesianGrid strokeDasharray="3 3" />
 							<XAxis dataKey="year" />
-							<YAxis tickFormatter={(value) => new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short" }).format(value as number)} />
-							<Tooltip formatter={(value) => (value as number).toLocaleString()} />
-							<Line type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={2} />
+							<YAxis
+								tickFormatter={(value) =>
+									new Intl.NumberFormat("en-US", {
+										notation: "compact",
+										compactDisplay: "short",
+									}).format(value as number)
+								}
+							/>
+							<Tooltip
+								formatter={(value, name, props) => [
+									(
+										props.payload.value as number
+									).toLocaleString(),
+									"Employment",
+								]}
+							/>
+							<Legend />
+							<Line
+								name="Actual"
+								type="monotone"
+								dataKey="actual"
+								stroke="#8884d8"
+								strokeWidth={2}
+								connectNulls={false}
+							/>
+							<Line
+								name="Projected"
+								type="monotone"
+								dataKey="projected"
+								stroke="#82ca9d"
+								strokeWidth={2}
+								strokeDasharray="5 5"
+								connectNulls={false}
+							/>
 						</LineChart>
 					</ResponsiveContainer>
 				</div>
@@ -341,46 +467,78 @@ function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
 		</div>
 	);
 }
-function JobGrowthModalContent({ data, geoType }: { data: JobGrowthData; geoType: "tract" | "zip" | "county" }) {
-    const { granular_data, county_context, notes = [], geo } = data;
-    const hasGranularData = granular_data && !granular_data.error;
-    const hasCountyData = county_context && !county_context.error;
+function JobGrowthModalContent({
+	data,
+	geoType,
+}: {
+	data: JobGrowthData;
+	geoType: "tract" | "zip" | "county";
+}) {
+	const { granular_data, county_context, notes = [], geo } = data;
+	const hasGranularData = granular_data && !granular_data.error;
+	const hasCountyData = county_context && !county_context.error;
 
-    return (
-        <>
-            <CardHeader className="pt-0 px-0">
-                <CardTitle>{geo.lat}, {geo.lon}</CardTitle>
-                <CardDescription>{geoType.toUpperCase()} Level Analysis</CardDescription>
-            </CardHeader>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
-                <div className="space-y-6">
-                    {hasGranularData && (
-                        <DataDisplay
-                            data={granular_data}
-                            title={`${geoType.charAt(0).toUpperCase() + geoType.slice(1)} Level Data`}
-                        />
-                    )}
-                    {granular_data?.error && <Alert variant="destructive"><AlertDescription>{granular_data.error}</AlertDescription></Alert>}
+	return (
+		<>
+			<CardHeader className="pt-0 px-0">
+				<CardTitle>
+					{geo.lat}, {geo.lon}
+				</CardTitle>
+				<CardDescription>
+					{geoType.toUpperCase()} Level Analysis
+				</CardDescription>
+			</CardHeader>
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
+				<div className="space-y-6">
+					{hasGranularData && (
+						<DataDisplay
+							data={granular_data}
+							title={`${
+								geoType.charAt(0).toUpperCase() +
+								geoType.slice(1)
+							} Level Data`}
+						/>
+					)}
+					{granular_data?.error && (
+						<Alert variant="destructive">
+							<AlertDescription>
+								{granular_data.error}
+							</AlertDescription>
+						</Alert>
+					)}
 
-                    {hasCountyData && geoType !== 'county' && (
-                        <DataDisplay data={county_context} title="County Level Context" />
-                    )}
-                    {county_context?.error && <Alert variant="destructive"><AlertDescription>{county_context.error}</AlertDescription></Alert>}
-                </div>
-                <div className="space-y-6">
-                    <div>
-                        <h4 className="font-semibold mb-2">Market Area</h4>
-                        <Map lat={geo.lat} lon={geo.lon} geoType={geoType} />
-                    </div>
+					{hasCountyData && geoType !== "county" && (
+						<DataDisplay
+							data={county_context}
+							title="County Level Context"
+						/>
+					)}
+					{county_context?.error && (
+						<Alert variant="destructive">
+							<AlertDescription>
+								{county_context.error}
+							</AlertDescription>
+						</Alert>
+					)}
+				</div>
+				<div className="space-y-6">
+					<div>
+						<h4 className="font-semibold mb-2">Market Area</h4>
+						<Map lat={geo.lat} lon={geo.lon} geoType={geoType} />
+					</div>
 
-                    {notes.length > 0 && (
-                        <div className="text-xs text-muted-foreground space-y-1 pt-4 border-t">
-                            <h4 className="font-semibold mb-2 text-sm text-foreground">Notes</h4>
-                            {notes.map((note, i) => (<p key={i}>* {note}</p>))}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </>
-    );
+					{notes.length > 0 && (
+						<div className="text-xs text-muted-foreground space-y-1 pt-4 border-t">
+							<h4 className="font-semibold mb-2 text-sm text-foreground">
+								Notes
+							</h4>
+							{notes.map((note, i) => (
+								<p key={i}>* {note}</p>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+		</>
+	);
 }

@@ -56,6 +56,7 @@ interface DataPayload {
 	growth: Growth;
 	top_sectors_growing: Sector[];
 	trends: { year: number; value: number; projected?: boolean }[];
+	monthly_employment_trends?: { year: string; month: string; value: number; label: string }[];
 	error?: string;
 }
 
@@ -351,9 +352,16 @@ function JobGrowthCard({
 }
 
 function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
-	const chartData = React.useMemo(() => {
+	const yearlyChartData = React.useMemo(() => {
 		if (!data.trends || data.trends.length === 0) return [];
-		const sortedTrends = [...data.trends].reverse(); // chart needs ascending years
+
+		const latestYear = Math.max(...data.trends.map((t) => t.year));
+		const fiveYearsAgo = latestYear - 4;
+		const filteredTrends = data.trends.filter(
+			(t) => t.year >= fiveYearsAgo
+		);
+
+		const sortedTrends = [...filteredTrends].reverse(); // chart needs ascending years
 		const lastActualPointIndex = sortedTrends.findLastIndex(
 			(p) => !p.projected
 		);
@@ -379,6 +387,7 @@ function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
 			return point;
 		});
 	}, [data.trends]);
+
 	return (
 		<div className="p-4 border rounded-lg">
 			<h3 className="font-semibold text-lg mb-1">{title}</h3>
@@ -416,16 +425,54 @@ function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
 					</div>
 				)}
 
-			{data.trends && data.trends.length > 0 && (
+			{data.monthly_employment_trends &&
+			data.monthly_employment_trends.length > 0 ? (
+				<div>
+					<h4 className="font-semibold my-2">
+						County Employment Trend (Monthly)
+					</h4>
+					<ResponsiveContainer width="100%" height={200}>
+						<LineChart
+							data={data.monthly_employment_trends}
+							margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
+						>
+							<CartesianGrid strokeDasharray="3 3" />
+							<XAxis dataKey="label" interval={5} />
+							<YAxis
+								tickFormatter={(value) =>
+									new Intl.NumberFormat("en-US", {
+										notation: "compact",
+										compactDisplay: "short",
+									}).format(value as number)
+								}
+							/>
+							<Tooltip
+								formatter={(value) =>
+									(value as number).toLocaleString()
+								}
+							/>
+							<Legend />
+							<Line
+								name="Employment"
+								type="monotone"
+								dataKey="value"
+								stroke="#8884d8"
+								strokeWidth={2}
+								dot={false}
+							/>
+						</LineChart>
+					</ResponsiveContainer>
+				</div>
+			) : yearlyChartData && yearlyChartData.length > 0 ? (
 				<div>
 					<h4 className="font-semibold my-2">Employment Trend</h4>
 					<ResponsiveContainer width="100%" height={200}>
 						<LineChart
-							data={chartData}
+							data={yearlyChartData}
 							margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
 						>
 							<CartesianGrid strokeDasharray="3 3" />
-							<XAxis dataKey="year" />
+							<XAxis dataKey="year" interval={0} />
 							<YAxis
 								tickFormatter={(value) =>
 									new Intl.NumberFormat("en-US", {
@@ -463,7 +510,7 @@ function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
 						</LineChart>
 					</ResponsiveContainer>
 				</div>
-			)}
+			) : null}
 		</div>
 	);
 }

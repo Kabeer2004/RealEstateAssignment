@@ -140,6 +140,19 @@ async def fetch_bls_lau_data(county_fips: str) -> dict:
         current_unemp = float(unemp_data[0]['value']) if unemp_data else None
         current_labor = int(labor_data[0]['value']) if labor_data else None
 
+        # Monthly trends for chart
+        monthly_trends = [
+            {
+                "year": d['year'],
+                "month": d['periodName'],
+                "value": int(d['value']),
+                "label": f"{d['periodName'][:3]}-{d['year'][2:]}"
+            }
+            for d in emp_data[:36]
+        ]
+        monthly_trends.reverse()  # For charting in ascending order
+
+
         # Trends: Yearly averages
         from collections import defaultdict
         def calculate_yearly_trends(data_series):
@@ -157,13 +170,14 @@ async def fetch_bls_lau_data(county_fips: str) -> dict:
 
         return {
             "growth": growth,
-                "total_jobs": latest_emp,
+            "total_jobs": latest_emp,
             "unemployment_rate": current_unemp,
             "labor_force": current_labor,
             "trends": emp_trends, # For backward compatibility
             "employment_trends": emp_trends,
             "unemployment_rate_trends": unemp_rate_trends,
             "labor_force_trends": labor_force_trends,
+            "monthly_employment_trends": monthly_trends,
         }
 
 async def fetch_bls_qcew_sectors(county_fips: str) -> list:
@@ -453,18 +467,18 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
             elif census_data.get("error"):
                 granular_data = {"error": census_data["error"]}
 
-            if geo_type == 'county' and county_context:
-                granular_data = county_context
-                county_context = None
+        if geo_type == 'county' and county_context:
+            granular_data = county_context
+            county_context = None
 
-            result = {
-                "geo": {**geo, **fips},
-                "county_context": county_context,
-                "granular_data": granular_data,
-                "notes": notes,
-            }
-            await redis_client.setex(cache_key, 3600, json.dumps(result))
-            return result
+        result = {
+            "geo": {**geo, **fips},
+            "county_context": county_context,
+            "granular_data": granular_data,
+            "notes": notes,
+        }
+        await redis_client.setex(cache_key, 3600, json.dumps(result))
+        return result
     except HTTPException as e:
         raise e
     except Exception as e:

@@ -114,19 +114,29 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> dict:
     Fetches top growing sectors and average weekly wage data from BLS QCEW.
     """
     major_sectors = {
+        '11': 'Agriculture, Forestry, Fishing & Hunting',
+        '21': 'Mining, Quarrying, Oil & Gas',
+        '22': 'Utilities',
         '23': 'Construction',
-        '31': 'Manufacturing',
+        '31': 'Manufacturing - Food/Textiles/Apparel',
+        '32': 'Manufacturing - Paper/Chemicals/Plastics',
+        '33': 'Manufacturing - Metals/Machinery/Electronics',
         '42': 'Wholesale Trade',
-        '44': 'Retail Trade',
-        '48': 'Transportation and Warehousing',
+        '44': 'Retail Trade (Vehicles, Food, Health)',
+        '45': 'Retail Trade (General Merchandise, etc.)',
+        '48': 'Transportation',
+        '49': 'Warehousing & Couriers',
         '51': 'Information',
         '52': 'Finance and Insurance',
-        '53': 'Real Estate and Rental',
-        '54': 'Professional and Technical Services',
-        '56': 'Admin and Support Services',
+        '53': 'Real Estate and Rental & Leasing',
+        '54': 'Professional, Scientific, & Technical Services',
+        '55': 'Management of Companies & Enterprises',
+        '56': 'Administrative & Waste Services',
         '61': 'Educational Services',
         '62': 'Health Care and Social Assistance',
+        '71': 'Arts, Entertainment, & Recreation',
         '72': 'Accommodation and Food Services',
+        '81': 'Other Services',
     }
 
     # Correct BLS QCEW series ID format

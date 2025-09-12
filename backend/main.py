@@ -201,11 +201,11 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> list:
     async with aiohttp.ClientSession() as session:
         url = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
         async with session.post(url, data=payload, headers=headers) as resp:
-            if resp.status != 200:
-                return ["Tech", "Healthcare"]  # Fallback
+            if resp.status != 200: # Fallback
+                return [{"name": "Tech", "growth": 0}, {"name": "Healthcare", "growth": 0}]
             result = await resp.json()
             if result.get('status') != 'REQUEST_SUCCEEDED':
-                return ["Tech", "Healthcare"]
+                return [{"name": "Tech", "growth": 0}, {"name": "Healthcare", "growth": 0}]
 
             series = result.get('Results', {}).get('series', [])
 
@@ -223,7 +223,7 @@ async def fetch_bls_qcew_sectors(county_fips: str) -> list:
 
             # Top 3 by YoY growth
             top = sorted(sector_growth, key=lambda x: x[0], reverse=True)[:3]
-            return [name for _, name in top] or ["Tech", "Healthcare"]
+            return [{"name": name, "growth": growth} for growth, name in top] or [{"name": "Tech", "growth": 0}, {"name": "Healthcare", "growth": 0}]
 
 async def fetch_census_data(fips: dict, geo: dict, geo_type: str) -> dict:
     state = fips['state_fips']
@@ -233,7 +233,7 @@ async def fetch_census_data(fips: dict, geo: dict, geo_type: str) -> dict:
 
     trends = []
     for year in range(2018, 2024):
-        get_vars = "B23025_004E,B23025_005E,B23025_001E"  # Employed, unemployed, labor force
+        get_vars = "B23025_004E,B23025_005E,B23025_003E"  # Employed, Unemployed, Civilian Labor Force
         if geo_type == "tract" and tract:
             for_clause = f"tract:{tract}"
             in_clause = f"state:{state} county:{county}"
@@ -313,28 +313,47 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
         # Parallel fetches
         lau_task = fetch_bls_lau_data(county_fips)
         qcew_sectors_task = fetch_bls_qcew_sectors(county_fips)
-        census_task = fetch_census_data(fips, geo, geo_type) if geo_type in ['tract', 'zip'] else asyncio.sleep(0)  # Fallback for finer geo
+        census_task = asyncio.sleep(0)
+        if geo_type in ['tract', 'zip']:
+            census_task = fetch_census_data(fips, geo, geo_type)
 
-        lau_data, top_sectors, census_data = await asyncio.gather(lau_task, qcew_sectors_task, census_task)
+        lau_data, top_sectors, census_data = await asyncio.gather(
+            lau_task, qcew_sectors_task, census_task
+        )
 
-        if 'error' in lau_data:
-            result = census_data if isinstance(census_data, dict) and 'trends' in census_data else {}
-            result['error'] = lau_data['error']
-        else:
-            result = lau_data
-            if isinstance(census_data, dict) and 'total_jobs' in census_data:
-                # Override with finer granularity if available (but note less timely)
-                result['total_jobs'] = census_data['total_jobs']
-                result['unemployment_rate'] = census_data['unemployment_rate']
-                result['labor_force'] = census_data['labor_force']
-                result['note'] = "Finer geo from Census (annual est); growth from county BLS (monthly)"
+        notes = []
+        county_context = None
+        if 'error' not in lau_data:
+            county_context = {
+                "source": "BLS (Monthly)",
+                **lau_data,
+                "top_sectors_growing": top_sectors,
+            }
+        elif lau_data.get("error"):
+            county_context = {"error": lau_data["error"]}
 
-        result['top_sectors'] = top_sectors
+        granular_data = None
+        if isinstance(census_data, dict):
+            if 'error' not in census_data:
+                granular_data = {
+                    "source": "Census ACS 5-Year (Annual)",
+                    **census_data,
+                    "top_sectors_growing": [],  # Census fetch doesn't do sectors yet
+                }
+                notes.append("Granular data from Census is less timely (annual estimates) than county-level BLS data (monthly).")
+            elif census_data.get("error"):
+                granular_data = {"error": census_data["error"]}
 
-        # Combine geo + fips
-        geo_data = {**geo, **fips}
-        result['geo'] = geo_data
+        if geo_type == 'county' and county_context:
+            granular_data = county_context
+            county_context = None
 
+        result = {
+            "geo": {**geo, **fips},
+            "county_context": county_context,
+            "granular_data": granular_data,
+            "notes": notes,
+        }
         await redis_client.setex(cache_key, 3600, json.dumps(result))
         return result
     except HTTPException as e:

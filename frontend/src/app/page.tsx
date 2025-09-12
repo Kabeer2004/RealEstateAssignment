@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import Select from "react-select";
+import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { useAddressStore } from "@/lib/store";
 import { addressSchema } from "@/lib/schema";
@@ -31,28 +31,34 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { CardDescription } from "@/components/ui/card";
 
-interface JobGrowthData {
-	growth: {
-		"6mo": number | null;
-		"1y": number | null;
-		"2y": number | null;
-		"5y": number | null;
-	};
+interface Growth {
+	"6mo"?: number;
+	"1y"?: number;
+	"2y"?: number;
+	"5y"?: number;
+}
+
+interface Sector {
+	name: string;
+	growth: number;
+}
+
+interface DataPayload {
+	source: string;
 	total_jobs: number;
-	unemployment_rate: number | null;
-	labor_force: number | null;
-	trends: { year: number; value: number; unemp_rate?: number }[];
-	top_sectors: string[];
-	note?: string;
-	geo: {
-		lat: number;
-		lon: number;
-		state_fips: string;
-		county_fips: string;
-		tract_code: string;
-		error?: string;
-	};
+	unemployment_rate?: number;
+	labor_force?: number;
+	growth: Growth;
+	top_sectors_growing: Sector[];
+	trends: { year: number; value: number }[];
 	error?: string;
+}
+
+interface JobGrowthData {
+	geo: { lat: number; lon: number };
+	county_context?: DataPayload;
+	granular_data?: DataPayload;
+	notes: string[];
 }
 
 const queryClient = new QueryClient();
@@ -69,6 +75,9 @@ const Map = dynamic(() => import("@/components/Map"), {
 	ssr: false,
 	loading: () => <Skeleton className="h-[200px] w-full" />,
 });
+
+// Dynamically import react-select to prevent SSR hydration errors
+const ClientOnlySelect = dynamic(() => import("react-select"), { ssr: false });
 
 function JobGrowthPage() {
 	const [flushCache, setFlushCache] = useState(false);
@@ -110,7 +119,7 @@ function JobGrowthPage() {
 								{methods.formState.errors.addresses.message}
 							</p>
 						)}
-						<Select
+						<ClientOnlySelect
 							options={[
 								{ value: "tract", label: "Census Tract" },
 								{ value: "zip", label: "ZIP Code" },
@@ -220,6 +229,10 @@ function JobGrowthCard({
 
 	if (!data) return null;
 
+	const { granular_data, county_context, notes } = data;
+	const hasGranularData = granular_data && !granular_data.error;
+	const hasCountyData = county_context && !county_context.error;
+
 	return (
 		<motion.div
 			initial={{ opacity: 0, scale: 0.95 }}
@@ -229,75 +242,107 @@ function JobGrowthCard({
 			<Card>
 				<CardHeader>
 					<CardTitle>{address}</CardTitle>
-					<CardDescription>
-						County FIPS: {data.geo.county_fips} | Tract:{" "}
-						{data.geo.tract_code}
-					</CardDescription>
+					<CardDescription>{geoType.toUpperCase()}</CardDescription>
 				</CardHeader>
 				<CardContent>
-					{data.error && (
-						<Alert variant="destructive" className="mb-4">
-							<AlertDescription>{data.error}</AlertDescription>
-						</Alert>
-					)}
-					{data.note && (
-						<Alert className="mb-4">
-							<AlertDescription>{data.note}</AlertDescription>
-						</Alert>
-					)}
-					<div className="grid grid-cols-2 gap-4 mb-4 text-center">
+					<div className="space-y-6">
+						{hasGranularData && (
+							<DataDisplay
+								data={granular_data}
+								title={`${
+									geoType.charAt(0).toUpperCase() +
+									geoType.slice(1)
+								} Level Data`}
+							/>
+						)}
+						{granular_data?.error && (
+							<Alert variant="destructive">
+								<AlertDescription>
+									{granular_data.error}
+								</AlertDescription>
+							</Alert>
+						)}
+
+						{hasCountyData && (
+							<DataDisplay
+								data={county_context}
+								title="County Level Context"
+							/>
+						)}
+						{county_context?.error && (
+							<Alert variant="destructive">
+								<AlertDescription>
+									{county_context.error}
+								</AlertDescription>
+							</Alert>
+						)}
+
 						<div>
-							<p className="text-sm text-muted-foreground">
-								Total Jobs
-							</p>
-							<p className="text-2xl font-bold">
-								{data.total_jobs.toLocaleString()}
-							</p>
+							<h4 className="font-semibold my-2 mt-4">
+								Market Area
+							</h4>
+							<Map lat={data.geo.lat} lon={data.geo.lon} />
 						</div>
-						<div>
-							<p className="text-sm text-muted-foreground">
-								Unemp. Rate
-							</p>
-							<p className="text-2xl font-bold">
-								{data.unemployment_rate}%
-							</p>
-						</div>
-						<div>
-							<p className="text-sm text-muted-foreground">
-								Labor Force
-							</p>
-							<p className="text-2xl font-bold">
-								{data.labor_force?.toLocaleString()}
-							</p>
-						</div>
-						<div>
-							<p className="text-sm text-muted-foreground">
-								1Y Growth
-							</p>
-							<p
-								className={`text-2xl font-bold ${
-									(data.growth["1y"] ?? 0) >= 0
-										? "text-green-600"
-										: "text-red-600"
-								}`}
-							>
-								{data.growth["1y"]}%
-							</p>
-						</div>
+
+						{notes.length > 0 && (
+							<div className="text-xs text-muted-foreground space-y-1 pt-4 border-t">
+								{notes.map((note, i) => (
+									<p key={i}>* {note}</p>
+								))}
+							</div>
+						)}
 					</div>
-					<div className="text-sm text-muted-foreground mb-2">
-						<p>
-							Growth - 6mo:{" "}
-							<strong>{data.growth["6mo"] ?? "N/A"}%</strong> |
-							2y: <strong>{data.growth["2y"] ?? "N/A"}%</strong> |
-							5y: <strong>{data.growth["5y"] ?? "N/A"}%</strong>
-						</p>
-					</div>
+				</CardContent>
+			</Card>
+		</motion.div>
+	);
+}
+
+function DataDisplay({ data, title }: { data: DataPayload; title: string }) {
+	const growthPeriods = ["6mo", "1y", "2y", "5y"] as const;
+	const growthData = growthPeriods
+		.map((p) => ({ period: p, value: data.growth[p] }))
+		.filter((d) => d.value != null);
+
+	return (
+		<div className="p-4 border rounded-lg">
+			<h3 className="font-semibold text-lg mb-1">{title}</h3>
+			<p className="text-xs text-muted-foreground mb-3">{data.source}</p>
+
+			<div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-4 text-sm">
+				<div className="font-medium">Total Jobs:</div>
+				<div>{(data.total_jobs ?? 0).toLocaleString()}</div>
+				<div className="font-medium">Unemployment:</div>
+				<div>{data.unemployment_rate?.toFixed(1)}%</div>
+				<div className="font-medium">Labor Force:</div>
+				<div>{(data.labor_force ?? 0).toLocaleString()}</div>
+			</div>
+
+			{data.top_sectors_growing && data.top_sectors_growing.length > 0 && (
+				<div>
 					<p className="text-sm text-muted-foreground mb-2">
-						Top Sectors:{" "}
-						<strong>{data.top_sectors.join(", ")}</strong>
+						Top Growing Sectors (YoY):
 					</p>
-					<h4 className="font-semibold my-2">Employment Trends</h4>
+					<div className="flex flex-wrap gap-1 mb-4">
+						{data.top_sectors_growing.map((sector) => (
+							<Badge
+								key={sector.name}
+								variant={
+									sector.growth > 0
+										? "default"
+										: "secondary"
+								}
+							>
+								{sector.name}: {sector.growth}%
+							</Badge>
+						))}
+					</div>
+				</div>
+			)}
+
+			{data.trends && data.trends.length > 0 && (
+				<div>
+					<h4 className="font-semibold my-2">Employment Trend</h4>
 					<ResponsiveContainer width="100%" height={200}>
 						<LineChart
 							data={data.trends}
@@ -305,19 +350,29 @@ function JobGrowthCard({
 						>
 							<CartesianGrid strokeDasharray="3 3" />
 							<XAxis dataKey="year" />
-							<YAxis />
-							<Tooltip />
+							<YAxis
+								tickFormatter={(value) =>
+									new Intl.NumberFormat("en-US", {
+										notation: "compact",
+										compactDisplay: "short",
+									}).format(value as number)
+								}
+							/>
+							<Tooltip
+								formatter={(value) =>
+									(value as number).toLocaleString()
+								}
+							/>
 							<Line
 								type="monotone"
 								dataKey="value"
 								stroke="#8884d8"
+								strokeWidth={2}
 							/>
 						</LineChart>
 					</ResponsiveContainer>
-					<h4 className="font-semibold my-2 mt-4">Market Area</h4>
-					<Map lat={data.geo.lat} lon={data.geo.lon} />
-				</CardContent>
-			</Card>
-		</motion.div>
+				</div>
+			)}
+		</div>
 	);
 }

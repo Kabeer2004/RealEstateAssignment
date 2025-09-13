@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:15-alpine
-    container_name: capmatch_db
+    container_name: capmatch_db_local
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
@@ -19,7 +17,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: capmatch_redis
+    container_name: capmatch_redis_local
     command: redis-server --requirepass your-secure-redis-password
     volumes:
       - redis_data:/data
@@ -32,7 +30,9 @@ services:
 
   backend:
     build: ./backend
-    container_name: capmatch_backend
+    container_name: capmatch_backend_local
+    ports:
+      - "8000:8000" # <-- Expose backend port
     env_file:
       - ./backend/.env
     environment:
@@ -50,12 +50,11 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: "" # API calls will be relative to the domain (e.g. /api/job-growth)
-    container_name: capmatch_frontend
+        # Tell the frontend where the backend API is for local dev
+        NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    container_name: capmatch_frontend_local
     ports:
-      - "3000:3000"
-    depends_on:
-      - backend
+      - "3000:3000" # <-- Expose frontend port
     restart: unless-stopped
 
 volumes:

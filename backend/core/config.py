@@ -15,6 +15,9 @@ limiter = Limiter(key_func=get_remote_address)
 BLS_API_KEY = os.getenv("BLS_API_KEY")
 CENSUS_API_KEY = os.getenv("CENSUS_API_KEY")
 
+# Database
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 # Redis
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 

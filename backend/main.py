@@ -1,25 +1,34 @@
-from fastapi import FastAPI, HTTPException, Request
+import sys
+from pathlib import Path
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import json
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from .core.config import limiter, ORIGINS
-from .core.cache import redis_client
-from .services.geo import geocode_address, get_fips_codes
-from .services.bls import (
+# Add backend directory to path to allow absolute imports
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from core.config import limiter, ORIGINS
+from core.cache import redis_client
+from core.database import get_db
+from db.models import ReportCache
+
+from services.geo import geocode_address, get_fips_codes
+from services.bls import (
     fetch_bls_lau_data,
     fetch_bls_qcew_sectors,
     fetch_national_employment_data,
     calculate_downturn_resilience,
 )
-from .services.census import (
+from services.census import (
     fetch_census_data,
     fetch_acs_data,
     project_census_data,
 )
-from .services.analysis import compare_local_to_national
+from services.analysis import compare_local_to_national
 
 app = FastAPI()
 app.state.limiter = limiter
@@ -39,21 +48,34 @@ def read_root():
 
 @app.get("/api/job-growth")
 @limiter.limit("10/minute")
-async def get_job_growth(request: Request, address: str, geo_type: str = "tract", flush_cache: bool = False):
+async def get_job_growth(request: Request, address: str, geo_type: str = "tract", flush_cache: bool = False, db: AsyncSession = Depends(get_db)):
     cache_key = f"{address}:{geo_type}:v2"
 
     if flush_cache:
         await redis_client.delete(cache_key)
+        db_report = await db.get(ReportCache, cache_key)
+        if db_report:
+            await db.delete(db_report)
+            await db.commit()
 
+    # 1. Check Redis (hot cache)
     cached = await redis_client.get(cache_key)
     if cached:
         try:
             return json.loads(cached)
         except json.JSONDecodeError:
-            # Invalid cache, proceed to fetch
+            # Invalid cache, proceed
             pass
 
+    # 2. Check Postgres (warm cache / persistence)
+    db_report = await db.get(ReportCache, cache_key)
+    if db_report:
+        result = db_report.result
+        await redis_client.setex(cache_key, 3600, json.dumps(result))
+        return result
+
     try:
+        # 3. If not found, fetch fresh data
         geo = await geocode_address(address)
         fips = await get_fips_codes(geo)
 
@@ -129,7 +151,18 @@ async def get_job_growth(request: Request, address: str, geo_type: str = "tract"
             "cre_summary": cre_summary,
             "notes": notes,
         }
+
+        # 4. Persist and cache the new data
+        db_report_to_save = await db.get(ReportCache, cache_key)
+        if db_report_to_save:
+            db_report_to_save.result = result
+        else:
+            db_report_to_save = ReportCache(cache_key=cache_key, result=result)
+            db.add(db_report_to_save)
+        await db.commit()
+
         await redis_client.setex(cache_key, 3600, json.dumps(result))
+
         return result
     except HTTPException as e:
         raise e

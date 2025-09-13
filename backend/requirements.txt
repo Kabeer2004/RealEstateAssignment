@@ -8,3 +8,6 @@ aiohttp
 python-dotenv
 pandas
 slowapi
+alembic
+psycopg2-binary
+greenlet

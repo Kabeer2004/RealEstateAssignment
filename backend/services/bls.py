@@ -3,7 +3,7 @@ import json
 from datetime import date
 from collections import defaultdict
 
-from ..core.config import BLS_API_KEY
+from core.config import BLS_API_KEY
 
 
 async def fetch_bls_lau_data(county_fips: str) -> dict:

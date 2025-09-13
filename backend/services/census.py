@@ -1,6 +1,6 @@
 import aiohttp
 
-from ..core.config import CENSUS_API_KEY
+from core.config import CENSUS_API_KEY
 
 
 async def fetch_acs_data(fips: dict, geo: dict, geo_type: str) -> dict:

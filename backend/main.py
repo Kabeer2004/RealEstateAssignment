@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Add backend directory to path to allow absolute imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core.config import limiter, ORIGINS
+from core.config import limiter, CORS_ORIGINS
 from core.cache import redis_client
 from core.database import get_db
 from db.models import ReportCache
@@ -36,7 +36,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ORIGINS,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

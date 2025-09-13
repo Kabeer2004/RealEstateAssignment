@@ -22,7 +22,4 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # CORS
-ORIGINS = [
-    "http://localhost:3000",
-    # Add your deployed frontend URL here later
-]
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(',')

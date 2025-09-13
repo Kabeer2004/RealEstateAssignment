@@ -1,3 +1,9 @@
+# SSL Certificates
+certbot/
+
+# Environment files
+.env
+backend/.env
 # Python
 __pycache__/
 *.py[cod]

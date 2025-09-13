@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: capmatch_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=capmatch
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d capmatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: capmatch_redis
+    command: redis-server --requirepass your-secure-redis-password
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "your-secure-redis-password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: capmatch_backend
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db/capmatch
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=your-secure-redis-password
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: "" # API calls will be relative to the domain (e.g. /api/job-growth)
+    container_name: capmatch_frontend
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: capmatch_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

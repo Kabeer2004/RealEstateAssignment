@@ -11,3 +11,9 @@ slowapi
 alembic
 psycopg2-binary
 greenlet
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+respx

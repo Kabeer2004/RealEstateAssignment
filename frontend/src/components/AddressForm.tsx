@@ -127,6 +127,7 @@ export function AddressForm() {
                   variant="ghost"
                   size="icon"
                   onClick={() => remove(index)}
+                  aria-label={`Remove address ${index + 1}`}
                   disabled={fields.length <= 1}
                 >
                   <X className="size-4" />

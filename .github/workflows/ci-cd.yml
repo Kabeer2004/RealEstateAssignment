@@ -1,0 +1,97 @@
+name: CI/CD for CapMatch
+
+on:
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python for backend tests
+        if: matrix.service == 'backend'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        if: matrix.service == 'backend'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run backend tests
+        if: matrix.service == 'backend'
+        run: |
+          cd backend
+          pytest
+
+      - name: Set up Node.js for frontend tests
+        if: matrix.service == 'frontend'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        if: matrix.service == 'frontend'
+        run: npm install --prefix frontend
+
+      - name: Run frontend tests
+        if: matrix.service == 'frontend'
+        run: npm test --prefix frontend
+
+  deploy:
+    name: Deploy to GCP VM
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Ensure the script exits on any error
+            set -e
+
+            # --- IMPORTANT ---
+            # Replace this path with the absolute path to your project on the VM
+            cd /path/to/your/project/directory
+
+            # Create the backend .env file from the GitHub secret
+            echo "${{ secrets.DOT_ENV_FILE }}" > backend/.env
+
+            # Pull the latest code from the main branch
+            echo "Pulling latest code..."
+            git checkout main
+            git pull origin main
+
+            # Rebuild and restart services using Docker Compose
+            echo "Stopping and rebuilding services..."
+            docker-compose -f docker-compose.yml down
+            docker-compose -f docker-compose.yml build --no-cache
+            docker-compose -f docker-compose.yml up -d
+
+            # Clean up old, unused Docker images to save space
+            echo "Cleaning up old Docker images..."
+            docker image prune -af
+
+            echo "Deployment successful!"

@@ -43,10 +43,14 @@ app.add_middleware(
 )
 
 @app.get("/")
-def read_root():
+async def read_root():
     return {"status": "Backend is running"}
 
-@app.get("/api/job-growth")
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
+@app.get("/job-growth")
 @limiter.limit("10/minute")
 async def get_job_growth(request: Request, address: str, geo_type: str = "tract", flush_cache: bool = False, db: AsyncSession = Depends(get_db)):
     cache_key = f"{address}:{geo_type}:v2"

@@ -45,7 +45,7 @@ export function InfoModal({
                 data on total employment, unemployment rates, and labor force
                 size.
                 <br />- <span className="font-semibold">Why we use it:</span> It
-                offers excellent timeliness (usually last month's data) and
+                offers excellent timeliness (usually last months data) and
                 complete coverage for all 3,000+ U.S. counties, making it the
                 bedrock for county-level job growth trends.
               </p>
@@ -105,7 +105,7 @@ export function InfoModal({
               </p>
               <div>
                 <h5 className="font-semibold text-foreground">
-                  Let's break it down:
+                  Let&apos;s break it down:
                 </h5>
                 <ul className="list-disc pl-5 mt-1 space-y-1">
                   <li>
@@ -114,7 +114,8 @@ export function InfoModal({
                     </span>{" "}
                     This is the most recent actual employment number for the
                     small geography (e.g., Census Tract) from the latest Census
-                    ACS data. This is our starting point or "baseline."
+                    ACS data. This is our starting point or
+                    &quot;baseline.&quot;
                   </li>
                   <li>
                     <span className="font-medium text-foreground">
@@ -130,9 +131,9 @@ export function InfoModal({
                 <h5 className="font-semibold text-foreground">Example:</h5>
                 <p>
                   If the last actual data for a Census Tract was{" "}
-                  <strong>500 jobs</strong> in 2022, and the surrounding county
+                  <strong>500 jobs</strong> in 2022, and the surrounding county{" "}
                   saw a job growth of <strong>3%</strong> during 2023, we
-                  project the tract's 2023 employment as:
+                  project the tract&apos;s 2023 employment as:
                   <br />
                   <span className="font-mono text-foreground">
                     500 × (1 + 0.03) = 515 jobs.
@@ -179,9 +180,9 @@ export function InfoModal({
                   Top Growing Sectors:
                 </span>{" "}
                 Highlights which types of commercial real estate are in demand.
-                A boom in "Health Care" signals a need for medical office
-                buildings; growth in "Professional Services" supports office
-                demand.
+                A boom in &quot;Health Care&quot; signals a need for medical
+                office buildings; growth in &quot;Professional Services&quot;
+                supports office demand.
               </li>
               <li>
                 <span className="font-semibold text-foreground">
@@ -209,18 +210,18 @@ export function InfoModal({
           <div className="text-sm text-muted-foreground space-y-2">
             <p>
               For institutional-grade analysis, teams often supplement public
-              data with paid, proprietary sources that offer deeper insights,
+              data with paid, proprietary sources that offer deeper insights,{" "}
               such as:
             </p>
             <ul className="list-disc pl-5 space-y-1">
               <li>
                 <span className="font-semibold text-foreground">CoStar:</span>{" "}
                 Comprehensive property-level data, rent and sales comps, and
-                market analytics.
+                market analytics.{" "}
               </li>
               <li>
                 <span className="font-semibold text-foreground">
-                  Moody's Analytics CRE (formerly REIS):
+                  Moody&apos;s Analytics CRE (formerly REIS):
                 </span>{" "}
                 Detailed market and submarket forecasts for rents, vacancies,
                 and property values.

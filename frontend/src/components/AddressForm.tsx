@@ -21,6 +21,11 @@ type AddressFormData = z.infer<typeof addressSchema>;
 // Dynamically import react-select to prevent SSR hydration errors
 const ClientOnlySelect = dynamic(() => import("react-select"), { ssr: false });
 
+type GeoOption = {
+  value: "tract" | "zip" | "county";
+  label: string;
+};
+
 const customSelectStyles: StylesConfig = {
   control: (base, { isFocused }) => ({
     ...base,
@@ -157,9 +162,9 @@ export function AddressForm() {
               { value: "zip", label: "ZIP Code" },
               { value: "county", label: "County" },
             ]}
-            onChange={(opt) => {
-              const geoTypeValue =
-                (opt?.value as "tract" | "zip" | "county") || "tract";
+            onChange={(opt: unknown) => {
+              const selectedOption = opt as GeoOption | null;
+              const geoTypeValue = selectedOption?.value || "tract";
               methods.setValue("geoType", geoTypeValue);
               setGeoType(geoTypeValue);
             }}

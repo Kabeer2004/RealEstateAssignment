@@ -1,15 +1,7 @@
 "use client";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  GeoJSON,
-  Circle,
-} from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Circle } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import { useMap } from "react-leaflet";
 import L from "leaflet";
-import { useEffect } from "react";
 
 // Fix for default marker icon not loading (common SSR/dynamic issue)
 const defaultIcon = L.icon({
@@ -27,56 +19,13 @@ const defaultIcon = L.icon({
 interface MapProps {
   lat: number;
   lon: number;
-  geoType: "tract" | "zip" | "county";
-  geometry?: any;
 }
 
-function FitBounds({ geometry }: { geometry: any }) {
-  const map = useMap();
-  useEffect(() => {
-    if (
-      (geometry && geometry.type === "MultiPolygon") ||
-      geometry.type === "Polygon"
-    ) {
-      try {
-        const geoJsonLayer = L.geoJSON(geometry);
-        const bounds = geoJsonLayer.getBounds();
-        if (bounds.isValid()) {
-          map.fitBounds(bounds, { padding: [10, 10], maxZoom: 16 });
-          // Add highlight on hover (optional enhancement)
-          geoJsonLayer.on("mouseover", () =>
-            geoJsonLayer.setStyle({ fillOpacity: 0.4, weight: 3 })
-          );
-          geoJsonLayer.on("mouseout", () =>
-            geoJsonLayer.setStyle({ fillOpacity: 0.2, weight: 2 })
-          );
-          geoJsonLayer.addTo(map);
-        }
-      } catch (e) {
-        console.error("Invalid geometry:", e, geometry);
-      }
-    }
-  }, [geometry, map]);
-
-  return null;
-}
-
-export default function Map({ lat, lon, geoType, geometry }: MapProps) {
+export default function Map({ lat, lon }: MapProps) {
   // Prevent rendering on the server
   if (typeof window === "undefined") {
     return null;
   }
-
-  // Enhanced style for tract highlighting (blue outline, semi-transparent fill)
-  const geoJsonStyle = (feature?: any) => ({
-    color: "#3388ff",
-    weight: 2,
-    opacity: 0.8,
-    fillColor: "#3388ff",
-    fillOpacity: 0.3,
-    dashArray: "",
-    fillRule: "evenodd",
-  });
 
   return (
     <MapContainer

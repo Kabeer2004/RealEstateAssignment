@@ -7,7 +7,7 @@ import axios from "axios";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { fetchJobGrowthData } from "@/lib/api";
+import { fetchJobGrowthData, JobGrowthData, DataPayload } from "@/lib/api";
 
 export function ComparisonTable({
   addresses,
@@ -105,19 +105,17 @@ export function ComparisonTable({
     },
   ];
 
-  const getNestedValue = (resultData: any, path: string) => {
+  const getNestedValue = (resultData: JobGrowthData | undefined, path: string) => {
     if (!resultData) return undefined;
 
     // Merge contexts, granular takes precedence
-    const mergedData = {
+    const mergedData: Partial<DataPayload> = {
       ...(resultData.county_context || {}),
       ...(resultData.granular_data || {}),
     };
 
-    const value = path
-      .split(".")
-      .reduce((acc, part) => acc && acc[part], mergedData);
-    return value;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return path.split(".").reduce<any>((acc, part) => acc?.[part], mergedData);
   };
 
   return (
@@ -191,19 +189,21 @@ export function ComparisonTable({
                       const value = getNestedValue(result.data, attr.path);
                       if (value === undefined || value === null) return "N/A";
 
-                      const formattedValue = attr.format
-                        ? attr.format(value)
-                        : value;
+                      if (typeof value === "object" && !attr.format) {
+                        return "N/A";
+                      }
+
+                      const formattedValue = attr.format ? attr.format(value) : String(value);
 
                       if (attr.label.includes("Sector")) {
-                        const sector = getNestedValue(result.data, attr.path);
+                        const sector = value as { name: string; growth: number };
                         return sector && sector.name ? (
                           <Badge
                             variant={
                               sector.growth > 0 ? "default" : "secondary"
                             }
                           >
-                            {formattedValue}
+                            {sector.name}: {sector.growth}%
                           </Badge>
                         ) : (
                           "N/A"

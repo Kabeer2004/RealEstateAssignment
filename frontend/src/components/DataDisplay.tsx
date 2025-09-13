@@ -35,7 +35,12 @@ export function DataDisplay({
     );
 
     return sortedTrends.map((d, i) => {
-      const point: any = {
+      const point: {
+        year: number;
+        value: number;
+        actual: number | null;
+        projected: number | null;
+      } = {
         year: d.year,
         value: d.value,
         actual: null,

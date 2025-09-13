@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, UseQueryResult } from "@tanstack/react-query";
 import axios from "axios";
 import { motion } from "framer-motion";
 
@@ -18,10 +18,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Modal } from "@/components/ui/modal";
 import { JobGrowthModalContent } from "@/components/JobGrowthModalContent";
 import { cn } from "@/lib/utils";
-import { JobGrowthData } from "@/lib/types";
 import { useHistoryStore } from "@/lib/historyStore";
 import { useAddressStore } from "@/lib/store";
-import { fetchJobGrowthData } from "@/lib/api";
+import { fetchJobGrowthData, JobGrowthData } from "@/lib/api";
 
 export function JobGrowthCard({
   address,
@@ -54,16 +53,11 @@ export function JobGrowthCard({
         return "bg-secondary text-secondary-foreground";
     }
   };
-  const { data, isLoading, isSuccess, error } = useQuery({
+  const { data, isLoading, isSuccess, error }: UseQueryResult<JobGrowthData, Error> = useQuery({
     queryKey: ["jobGrowth", address, geoType],
     queryFn: () => fetchJobGrowthData(address, geoType, flushCache),
     retry: false,
     staleTime: 1000 * 60 * 5, // 5 minutes
-    onSettled: () => {
-      if (flushCache) {
-        setFlushCache(false);
-      }
-    },
   });
 
   React.useEffect(() => {
@@ -85,6 +79,12 @@ export function JobGrowthCard({
       setStartTime(null);
     }
   }, [isLoading, isSuccess, startTime, addHistoryItem, address, geoType]);
+
+  React.useEffect(() => {
+    if (isSuccess && flushCache) {
+      setFlushCache(false);
+    }
+  }, [isSuccess, flushCache, setFlushCache]);
 
   React.useEffect(() => {
     let interval: NodeJS.Timeout;

@@ -66,7 +66,7 @@ export function JobGrowthModalContent({
         <div className="space-y-6">
           <div>
             <h4 className="font-semibold mb-2">Market Area</h4>
-            <Map lat={geo.lat} lon={geo.lon} geoType={geoType} />
+            <Map lat={geo.lat} lon={geo.lon} />
           </div>
 
           <div className="space-y-4 pt-4 border-t">

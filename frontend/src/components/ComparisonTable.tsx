@@ -14,7 +14,7 @@ export function ComparisonTable({
   geoType,
 }: {
   addresses: string[];
-  geoType: "tract" | "zip" | "county";
+  geoType: "tract" | "county";
 }) {
   const results = useQueries({
     queries: addresses.map((address) => ({

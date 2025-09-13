@@ -28,7 +28,7 @@ export function JobGrowthCard({
   flushCache,
 }: {
   address: string;
-  geoType: "tract" | "zip" | "county";
+  geoType: "tract" | "county";
   flushCache: boolean;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);

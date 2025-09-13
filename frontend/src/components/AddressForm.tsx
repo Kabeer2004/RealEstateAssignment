@@ -22,7 +22,7 @@ type AddressFormData = z.infer<typeof addressSchema>;
 const ClientOnlySelect = dynamic(() => import("react-select"), { ssr: false });
 
 type GeoOption = {
-  value: "tract" | "zip" | "county";
+  value: "tract" | "county";
   label: string;
 };
 
@@ -160,7 +160,6 @@ export function AddressForm() {
           <ClientOnlySelect
             options={[
               { value: "tract", label: "Census Tract" },
-              { value: "zip", label: "ZIP Code" },
               { value: "county", label: "County" },
             ]}
             onChange={(opt: unknown) => {

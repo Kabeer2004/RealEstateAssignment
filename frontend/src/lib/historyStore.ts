@@ -3,7 +3,7 @@ import { create } from "zustand";
 export interface HistoryItem {
   id: string; // address + geoType
   address: string;
-  geoType: "tract" | "zip" | "county";
+  geoType: "tract" | "county";
   duration: number; // in seconds
   timestamp: number; // when it was searched
 }

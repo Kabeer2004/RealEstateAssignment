@@ -20,7 +20,7 @@ export function JobGrowthModalContent({
 }: {
   address: string;
   data: JobGrowthData;
-  geoType: "tract" | "zip" | "county";
+  geoType: "tract" | "county";
 }) {
   const { granular_data, county_context, notes = [], geo, cre_summary } = data;
   const hasGranularData = granular_data && !granular_data.error;

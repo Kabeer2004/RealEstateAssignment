@@ -3,8 +3,8 @@ import { create } from 'zustand';
 interface AddressState {
   addresses: string[];
   setAddresses: (addresses: string[]) => void;
-  geoType: 'tract' | 'zip' | 'county';
-  setGeoType: (geoType: 'tract' | 'zip' | 'county') => void;
+  geoType: 'tract' | 'county';
+  setGeoType: (geoType: 'tract' | 'county') => void;
   flushCache: boolean;
   setFlushCache: (flush: boolean) => void;
 }

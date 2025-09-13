@@ -6,5 +6,5 @@ export const addressSchema = z.object({
       value: z.string().min(1, { message: 'Address cannot be empty.' }),
     })
   ).min(1, { message: 'Please enter at least one address.' }),
-  geoType: z.enum(['tract', 'zip', 'county']),
+  geoType: z.enum(['tract', 'county']),
 });
